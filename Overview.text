@@ -1,0 +1,964 @@
+# 🏗️ GeoBuild - Project Monitoring System
+
+## Complete System Overview
+
+---
+
+## 📋 Table of Contents
+1. [System Overview](#system-overview)
+2. [As-Is Process vs To-Be Process](#as-is-process-vs-to-be-process)
+3. [System Architecture](#system-architecture)
+4. [Backend Accomplishments](#backend-accomplishments)
+5. [API Documentation](#api-documentation)
+6. [Database Schema](#database-schema)
+7. [Frontend Design Guidelines](#frontend-design-guidelines)
+8. [Frontend-Backend Alignment Tracker](#frontend-backend-alignment-tracker)
+9. [Project Phases & Daily Tasks](#project-phases--daily-tasks)
+10. [GitHub README](#github-readme)
+
+---
+
+## 1. System Overview
+
+**GeoBuild** is a comprehensive project monitoring and disbursement tracking system for NCBA Bank. It digitizes the manual process of site visit reporting, geo-tagging photos, and facilitating communication between Relationship Managers (RMs) and Quantity Surveyors (QSs) for construction loan disbursements.
+
+### Core Business Flow
+
+```
+Customer Request → RM Site Visit → QS Review → Approval → Disbursement
+```
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Geo-tagged Photos** | Photos captured during site visits are automatically stamped with GPS coordinates to prevent fraud |
+| **IBPS Integration** | Links to bank's core system for facility validation |
+| **Role-based Access** | Separate dashboards for RMs and QSs |
+| **Task Locking** | Prevents multiple QSs from reviewing the same report |
+| **Audit Trail** | Complete history of all actions and comments |
+| **PDF Generation** | Downloadable approval reports with bank branding |
+
+---
+
+## 2. As-Is Process vs To-Be Process
+
+### 📉 As-Is Process (Manual)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      AS-IS PROCESS FLOW                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  Customer → Email Request + Documents                             │
+│       ↓                                                           │
+│  RM → Forwards to QS via Email                                    │
+│       ↓                                                           │
+│  QS → Manual Document Review                                      │
+│       ↓                                                           │
+│  QS → Physical Site Visit (if needed)                             │
+│       ↓                                                           │
+│  QS → Handwritten Notes + Phone Photos                            │
+│       ↓                                                           │
+│  QS → Manual Report Creation (Word)                               │
+│       ↓                                                           │
+│  QS → Email Approval to Credit Ops                                │
+│                                                                   │
+├─────────────────────────────────────────────────────────────────┤
+│                      PAIN POINTS                                  │
+├─────────────────────────────────────────────────────────────────┤
+│  ❌ No geo-verification of photos                                 │
+│  ❌ Manual report consolidation                                   │
+│  ❌ Disconnected systems                                         │
+│  ❌ No audit trail                                               │
+│  ❌ Delayed communication                                        │
+│  ❌ Inconsistent report formats                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 📈 To-Be Process (Digitized with GeoBuild)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      TO-BE PROCESS FLOW                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌─────────────┐                                                  │
+│  │   CUSTOMER  │                                                  │
+│  └──────┬──────┘                                                  │
+│         │ Requests Drawdown                                       │
+│         ↓                                                         │
+│  ┌─────────────┐                                                  │
+│  │     RM      │  • Logs into GeoBuild                           │
+│  └──────┬──────┘  • Enters IBPS Number → Auto-populates facility │
+│         │         • Conducts site visit                          │
+│         │         • Captures geo-tagged photos                   │
+│         │         • Completes digital call report                │
+│         │         • Uploads certificates                         │
+│         │         • Submits for review                           │
+│         ↓                                                         │
+│  ┌─────────────┐                                                  │
+│  │  QS POOL    │  • All QSs get notification                     │
+│  └──────┬──────┘  • Report appears in pending pool               │
+│         │                                                         │
+│         ↓                                                         │
+│  ┌─────────────┐                                                  │
+│  │  QS (takes) │  • Locks the report                             │
+│  └──────┬──────┘  • Reviews documents & photos                   │
+│         │         • Checks geo-tags match site                   │
+│         │         • Adds comments if needed                      │
+│         │         • Can return to RM for revisions               │
+│         ↓                                                         │
+│  ┌─────────────┐                                                  │
+│  │   SITE      │  • If needed, QS conducts site visit            │
+│  │   VISIT     │  • Captures own geo-tagged photos               │
+│  └──────┬──────┘  • Updates assessment                           │
+│         ↓                                                         │
+│  ┌─────────────┐                                                  │
+│  │  APPROVAL   │  • QS approves with amount                      │
+│  └──────┬──────┘  • System generates branded PDF                 │
+│         │         • RM gets notification                         │
+│         ↓                                                         │
+│  ┌─────────────┐                                                  │
+│  │ CREDIT OPS  │  • RM forwards PDF for disbursement             │
+│  └─────────────┘                                                  │
+│                                                                   │
+├─────────────────────────────────────────────────────────────────┤
+│                      BENEFITS                                     │
+├─────────────────────────────────────────────────────────────────┤
+│  ✅ Geo-verified authentic photos                                │
+│  ✅ Real-time notifications                                      │
+│  ✅ Centralized system                                           │
+│  ✅ Complete audit trail                                         │
+│  ✅ Standardized reports                                         │
+│  ✅ Task locking prevents conflicts                              │
+│  ✅ Mobile-friendly web interface                                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. System Architecture
+
+### High-Level Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           GEOBUILD SYSTEM ARCHITECTURE                       │
+│                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                         CLIENT LAYER                                  │    │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                  │    │
+│  │  │   React     │  │   Tailwind  │  │   TypeScript│                  │    │
+│  │  │   (Vite)    │  │    CSS      │  │             │                  │    │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘                  │    │
+│  │         │               │                 │                          │    │
+│  │         └───────────────┴─────────────────┘                          │    │
+│  │                    │                                                  │    │
+│  │              ┌──────▼──────┐                                          │    │
+│  │              │   Browser   │                                          │    │
+│  │              │  (Mobile/   │                                          │    │
+│  │              │   Desktop)  │                                          │    │
+│  │              └──────┬──────┘                                          │    │
+│  └─────────────────────┼────────────────────────────────────────────────┘    │
+│                        │ HTTPS/REST                                          │
+│  ┌─────────────────────┼────────────────────────────────────────────────┐    │
+│  │                    API GATEWAY                                         │    │
+│  │              ┌──────▼──────┐                                          │    │
+│  │              │   ASP.NET   │                                          │    │
+│  │              │   Core 8.0  │                                          │    │
+│  │              │   Controllers│                                         │    │
+│  │              └──────┬──────┘                                          │    │
+│  │                     │                                                  │    │
+│  │         ┌───────────┴───────────┐                                     │    │
+│  │         │       Services         │                                     │    │
+│  │  ┌──────▼──────┐  ┌──────────────▼──────┐                            │    │
+│  │  │  Facility   │  │   Notification      │                            │    │
+│  │  │   Service   │  │     Service         │                            │    │
+│  │  └─────────────┘  └─────────────────────┘                            │    │
+│  │         │                   │                                         │    │
+│  │         └───────────┬───────┘                                         │    │
+│  │                     │                                                 │    │
+│  │              ┌──────▼──────┐                                          │    │
+│  │              │Application  │                                          │    │
+│  │              │  DbContext  │                                          │    │
+│  │              └──────┬──────┘                                          │    │
+│  │                     │                                                 │    │
+│  └─────────────────────┼────────────────────────────────────────────────┘    │
+│                        │                                                     │
+│  ┌─────────────────────┼────────────────────────────────────────────────┐    │
+│  │                   DATA LAYER                                          │    │
+│  │              ┌──────▼──────┐                                          │    │
+│  │              │   MySQL     │                                          │    │
+│  │              │  Database   │                                          │    │
+│  │              └─────────────┘                                          │    │
+│  └───────────────────────────────────────────────────────────────────────┘    │
+│                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                    EXTERNAL INTEGRATIONS                              │    │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐      │    │
+│  │  │   Core Banking  │  │      SMTP       │  │   File Storage  │      │    │
+│  │  │   System (IBPS) │  │   Email Server  │  │   (Binary/DB)   │      │    │
+│  │  └─────────────────┘  └─────────────────┘  └─────────────────┘      │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Component Interaction Diagram
+
+```
+┌──────────────┐         HTTP        ┌──────────────┐        SQL        ┌──────────────┐
+│   Frontend   │ ──────────────────► │   Backend    │ ────────────────► │   MySQL      │
+│   (React)    │ ◄─────────────────  │  (ASP.NET)   │ ◄──────────────── │   Database   │
+└──────────────┘      JSON/HTTPS      └──────────────┘     ADO.NET       └──────────────┘
+       │                                      │                                  │
+       │                                      │                                  │
+       │        Geo-tagged Photos             │                                  │
+       │ ──────────────────────────────────►  │                                  │
+       │                                      │                                  │
+       │                                      │     IBPS Validation              │
+       │                                      │ ──────────────────────────────► │
+       │                                      │                                  │
+       │                                      │     Email Notifications          │
+       │                                      │ ──────────────────────────────► │
+       │                                      │         (SMTP)                   │
+```
+
+### Technology Stack
+
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| **Frontend** | React + TypeScript + Vite | Modern UI framework |
+| | Tailwind CSS | Styling |
+| | React Router | Navigation |
+| | Axios | API calls |
+| | React Hook Form | Form handling |
+| | GeoLocation API | GPS capture |
+| | React Camera | Photo capture |
+| **Backend** | ASP.NET Core 8.0 | API framework |
+| | Entity Framework Core | ORM |
+| | Pomelo MySQL | MySQL provider |
+| | JWT Bearer | Authentication |
+| | BCrypt | Password hashing |
+| | Swagger/OpenAPI | API documentation |
+| **Database** | MySQL 8.0 | Relational database |
+| **Infrastructure** | IIS/Apache | Web server |
+| | SMTP Server | Email |
+
+---
+
+## 4. Backend Accomplishments
+
+### ✅ Completed Features
+
+#### Authentication & Authorization
+- ✅ JWT-based authentication
+- ✅ User registration with BCrypt password hashing
+- ✅ Role-based access (RM, QS, Admin)
+- ✅ Secure login endpoint
+- ✅ Current user info endpoint
+
+#### Facility Management
+- ✅ IBPS number validation
+- ✅ Facility lookup by IBPS number
+- ✅ Milestone tracking per facility
+- ✅ Drawdown tranche tracking
+
+#### Site Visit Reports
+- ✅ Complete CRUD operations
+- ✅ Geo-tagged photo capture and storage
+- ✅ Document uploads (certificates, valuations)
+- ✅ Status workflow (Draft → Submitted → UnderReview → ReturnedToRM → Approved)
+- ✅ Auto-population from IBPS facility data
+
+#### QS Review Workflow
+- ✅ Task locking mechanism (prevents double-review)
+- ✅ Pending reports pool for QSs
+- ✅ Comment system with threading
+- ✅ Return to RM with feedback
+- ✅ Approval with custom amount
+- ✅ Full audit trail
+
+#### Notifications
+- ✅ In-app notification system
+- ✅ Email notification framework (pluggable)
+- ✅ QS notifications for new reports
+- ✅ RM notifications for status changes
+
+#### Data Models
+- ✅ Facility
+- ✅ Milestone
+- ✅ DrawdownTranche
+- ✅ SiteVisitReport
+- ✅ Attachment
+- ✅ ApprovalTrailEntry
+- ✅ ReportComment
+- ✅ WorkProgress
+- ✅ Issue
+- ✅ ReportPhoto
+- ✅ User
+- ✅ Client
+
+#### API Endpoints (15+ RESTful endpoints)
+- ✅ Auth Controller (3 endpoints)
+- ✅ Facility Controller (2 endpoints)
+- ✅ SiteVisitReport Controller (9 endpoints)
+- ✅ Users Controller (4 endpoints)
+- ✅ Clients Controller (8 endpoints)
+- ✅ Test Controller (3 endpoints)
+
+#### Database
+- ✅ MySQL database with 12 tables
+- ✅ Proper foreign key relationships
+- ✅ Indexes for performance
+- ✅ Audit fields (CreatedAt, UpdatedBy, etc.)
+- ✅ Binary storage for attachments
+
+### 🚧 Pending Enhancements
+
+| Feature | Priority | Status |
+|---------|----------|--------|
+| PDF Generation (QuestPDF) | High | 🔜 Next |
+| Core Banking Integration (real) | High | 🔜 |
+| Email Service Implementation | Medium | 🔜 |
+| SignalR Real-time Notifications | Medium | 🔜 |
+| Advanced Reporting/Analytics | Low | 📅 |
+| Mobile App (React Native) | Low | 📅 |
+
+---
+
+## 5. API Documentation
+
+### Base URL
+```
+https://localhost:5001/api
+```
+
+### Authentication Endpoints
+
+| Method | Endpoint | Description | Request Body | Response |
+|--------|----------|-------------|--------------|----------|
+| **POST** | `/auth/register` | Register new user | `{email, firstName, lastName, password, role?}` | `{token, user}` |
+| **POST** | `/auth/login` | Login user | `{email, password}` | `{token, user}` |
+| **GET** | `/auth/me` | Get current user | - | `{user}` |
+
+### Facility Endpoints
+
+| Method | Endpoint | Description | Parameters | Response |
+|--------|----------|-------------|------------|----------|
+| **GET** | `/facility/{ibpsNumber}` | Get facility details | `ibpsNumber` | `FacilityDto` |
+| **GET** | `/facility/{ibpsNumber}/validate` | Validate IBPS | `ibpsNumber` | `boolean` |
+
+### Site Visit Report Endpoints
+
+| Method | Endpoint | Description | Request Body | Response |
+|--------|----------|-------------|--------------|----------|
+| **POST** | `/SiteVisitReport` | Create draft | `CreateSiteVisitReportDto` | `SiteVisitReportResponseDto` |
+| **POST** | `/SiteVisitReport/{id}/submit` | Submit with attachments | `SubmitReportDto` | `{message}` |
+| **GET** | `/SiteVisitReport/pending` | Get pending reports | - | `List<SiteVisitReportResponseDto>` |
+| **POST** | `/SiteVisitReport/{id}/lock` | Lock for review | `LockReportDto` | `{message}` |
+| **POST** | `/SiteVisitReport/{id}/comments` | Add comment | `ReportCommentDto` | `{message}` |
+| **POST** | `/SiteVisitReport/{id}/return` | Return to RM | `QSActionDto` | `{message}` |
+| **POST** | `/SiteVisitReport/{id}/approve` | Approve report | `QSActionDto` | `{message}` |
+
+### User Management Endpoints
+
+| Method | Endpoint | Description | Request Body | Response |
+|--------|----------|-------------|--------------|----------|
+| **GET** | `/users` | Get all users | - | `List<UserDto>` |
+| **GET** | `/users/{id}` | Get user by ID | - | `UserDto` |
+| **POST** | `/users` | Create user | `RegisterDto` | `UserDto` |
+| **PUT** | `/users/{id}` | Update user | `UpdateUserDto` | `NoContent` |
+| **DELETE** | `/users/{id}` | Delete user | - | `NoContent` |
+
+### Client Management Endpoints
+
+| Method | Endpoint | Description | Parameters | Response |
+|--------|----------|-------------|------------|----------|
+| **GET** | `/clients` | Get paginated clients | `search, page, pageSize` | `PaginatedResponse<Client>` |
+| **GET** | `/clients/{id}` | Get client by ID | `id` | `Client` |
+| **GET** | `/clients/customer/{customerNumber}` | Get by customer number | `customerNumber` | `Client` |
+| **GET** | `/clients/search` | Search clients | `q` | `List<Client>` |
+| **POST** | `/clients` | Create client | `Client` | `Client` |
+| **PUT** | `/clients/{id}` | Update client | `Client` | `NoContent` |
+| **DELETE** | `/clients/{id}` | Delete client | - | `NoContent` |
+
+### Test Endpoints
+
+| Method | Endpoint | Description | Response |
+|--------|----------|-------------|----------|
+| **GET** | `/test/connection` | Test database connection | `{connected, message}` |
+| **GET** | `/test/facilities` | Get all facilities | `{count, facilities}` |
+| **GET** | `/test/test-ibps/{ibpsNumber}` | Test IBPS lookup | `{found, facility}` |
+
+---
+
+## 6. Database Schema
+
+### Entity Relationship Diagram
+
+```
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│     Users       │       │    Facilities   │       │     Clients     │
+├─────────────────┤       ├─────────────────┤       ├─────────────────┤
+│ Id (PK)         │       │ Id (PK)         │       │ Id (PK)         │
+│ Email           │       │ IBPSNumber (UK) │       │ CustomerNumber  │
+│ FirstName       │       │ CustomerName    │       │ Name            │
+│ LastName        │       │ TotalAmount     │       │ Email           │
+│ PasswordHash    │───────│ SiteLatitude    │       │ Phone           │
+│ Role            │       │ SiteLongitude   │       │ ProjectName     │
+│ CreatedAt       │       │ CreatedAt       │       │ CreatedAt       │
+└─────────────────┘       └────────┬────────┘       └─────────────────┘
+                                    │
+                          ┌─────────┴─────────┐
+                          │                   │
+                 ┌────────▼────────┐  ┌────────▼────────┐
+                 │   Milestones    │  │DrawdownTranches │
+                 ├─────────────────┤  ├─────────────────┤
+                 │ Id (PK)         │  │ Id (PK)         │
+                 │ FacilityId (FK) │  │ FacilityId (FK) │
+                 │ Description     │  │ TrancheNumber   │
+                 │ Order           │  │ Amount          │
+                 │ AllocatedAmount │  │ RequestDate     │
+                 │ IsAchieved      │  │ DisbursementDate│
+                 └─────────────────┘  │ Status          │
+                                      └─────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                     SiteVisitReports (Main Table)                │
+├─────────────────────────────────────────────────────────────────┤
+│ Id (PK)                                                          │
+│ FacilityId (FK) ───────────────────────────────────────────────►│
+│ RMUserId                                                         │
+│ VisitDate                                                        │
+│ VisitLatitude, VisitLongitude (Geo-tagged)                       │
+│ LocationAddress                                                   │
+│ PersonMet, PersonDesignation                                      │
+│ BQAmount, ConstructionLoanAmount, CustomerContribution           │
+│ DrawnFundsToDate, UndrawnFunds                                    │
+│ PlotLRNumber, ExactLocation, SitePin                              │
+│ CustomerProfile, SiteVisitObjectives                              │
+│ CompletedWorks, OngoingWorks (JSON/text)                          │
+│ MaterialsOnSite, DefectsNoted (JSON/text)                         │
+│ DrawdownRequestNumber, RequestedAmount                            │
+│ HasQSValuation, HasInterimCertificate, etc. (booleans)           │
+│ Status (Draft/Submitted/UnderReview/Returned/Approved)           │
+│ CurrentQSLockedBy, LockedUntil                                    │
+│ CreatedAt, CreatedBy, UpdatedAt, UpdatedBy                        │
+│ SubmittedAt, ApprovedAt, ApprovedBy, ApprovedAmount               │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │
+          ┌─────────────────┼─────────────────┐
+          │                 │                 │
+┌─────────▼─────────┐ ┌─────▼───────┐ ┌──────▼────────┐
+│    Attachments    │ │  WorkProgress│ │    Issues     │
+├───────────────────┤ ├─────────────┤ ├───────────────┤
+│ Id (PK)           │ │ Id (PK)     │ │ Id (PK)       │
+│ ReportId (FK)     │ │ ReportId(FK)│ │ ReportId (FK) │
+│ FileName          │ │ Description │ │ Title         │
+│ FileData (BLOB)   │ │ Percentage  │ │ Description   │
+│ ContentType       │ │ Category    │ │ Severity      │
+│ AttachmentType    │ │ Notes       │ │ Status        │
+│ PhotoLat/Long     │ │ CreatedAt   │ │ ResolvedAt    │
+│ IsGeoTagged       │ └─────────────┘ │ ResolvedBy    │
+└───────────────────┘                  └───────────────┘
+
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│  ReportComments │       │ApprovalTrail    │       │  ReportPhotos   │
+├─────────────────┤       ├─────────────────┤       ├─────────────────┤
+│ Id (PK)         │       │ Id (PK)         │       │ Id (PK)         │
+│ ReportId (FK)   │       │ ReportId (FK)   │       │ ReportId (FK)   │
+│ ParentCommentId │       │ UserId          │       │ Url             │
+│ UserId          │       │ UserRole        │       │ ThumbnailUrl    │
+│ UserRole        │       │ Action          │       │ Caption         │
+│ CommentText     │       │ Comments        │       │ Category        │
+│ CreatedAt       │       │ Timestamp       │       │ UploadedBy      │
+└─────────────────┘       │ PrevStatus      │       │ PhotoLat/Long   │
+                          │ NewStatus       │       │ IsGeoTagged     │
+                          └─────────────────┘       │ FileName        │
+                                                     └─────────────────┘
+```
+
+---
+
+## 7. Frontend Design Guidelines
+
+### Design Philosophy: **Clean, Minimal, Enterprise-Ready**
+
+### Color Palette
+
+```
+Primary:     #0052CC (Bank Blue)
+Secondary:   #36B37E (Success Green)
+Warning:     #FFAB00 (Amber)
+Error:       #FF5630 (Red)
+Neutral:     #172B4D (Dark Blue for text)
+Background:  #F4F5F7 (Light Gray)
+White:       #FFFFFF
+Border:      #DFE1E6 (Light Gray)
+```
+
+### Typography
+
+```
+Font Family: Inter (Sans-serif)
+- Headings: 600 (Semi-bold)
+- Body: 400 (Regular)
+- Small text: 400, 12px
+
+Sizes:
+- H1: 32px
+- H2: 24px
+- H3: 20px
+- H4: 18px
+- Body: 16px
+- Small: 14px
+- XSmall: 12px
+```
+
+### Component Library Recommendations
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    UI COMPONENT HIERARCHY                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Layout Components                                       │    │
+│  │  ├── AppLayout (with sidebar)                           │    │
+│  │  ├── AuthLayout (login/register)                        │    │
+│  │  └── DashboardLayout (with role-based views)            │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Authentication Components                               │    │
+│  │  ├── LoginForm                                           │    │
+│  │  └── RegisterForm                                        │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  RM Components                                           │    │
+│  │  ├── IBPSLookup                                          │    │
+│  │  ├── SiteVisitForm (matches Word doc)                    │    │
+│  │  ├── PhotoCapture (with geo-tagging)                     │    │
+│  │  ├── DocumentUpload                                       │    │
+│  │  ├── ReportPreview                                        │    │
+│  │  └── MyReportsList                                        │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  QS Components                                           │    │
+│  │  ├── PendingReportsList                                  │    │
+│  │  ├── ReportReview (with comments)                        │    │
+│  │  ├── PhotoGallery (with geo-validation)                  │    │
+│  │  ├── DocumentViewer                                       │    │
+│  │  ├── ApprovalModal                                        │    │
+│  │  └── ReturnModal                                          │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Shared Components                                      │    │
+│  │  ├── Navbar                                              │    │
+│  │  ├── Sidebar                                             │    │
+│  │  ├── NotificationBell                                    │    │
+│  │  ├── LoadingSpinner                                      │    │
+│  │  ├── ErrorBoundary                                       │    │
+│  │  ├── ConfirmationModal                                   │    │
+│  │  ├── DataTable                                           │    │
+│  │  └── StatusBadge                                         │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 8. Frontend-Backend Alignment Tracker
+
+### Phase 1: Authentication & Setup (Week 1)
+
+| Task ID | Component | Backend Endpoint | Status | Frontend Developer | Notes |
+|---------|-----------|------------------|--------|-------------------|-------|
+| **F-01** | Login Page | `POST /auth/login` | ⬜ Not Started | | Design login form, store JWT |
+| **F-02** | Register Page | `POST /auth/register` | ⬜ Not Started | | Only for admin users |
+| **F-03** | Auth Context | - | ⬜ Not Started | | Manage user state, roles |
+| **F-04** | Protected Routes | - | ⬜ Not Started | | Role-based routing (RM/QS) |
+| **F-05** | App Layout | - | ⬜ Not Started | | Sidebar, navbar, container |
+
+### Phase 2: RM Dashboard & Site Visit (Week 2)
+
+| Task ID | Component | Backend Endpoint | Status | Frontend Developer | Notes |
+|---------|-----------|------------------|--------|-------------------|-------|
+| **F-06** | RM Dashboard | `GET /test/facilities` | ⬜ Not Started | | Overview of recent reports |
+| **F-07** | IBPS Lookup | `GET /facility/{ibpsNumber}` | ⬜ Not Started | | Auto-populate facility data |
+| **F-08** | Site Visit Form | `POST /SiteVisitReport` | ⬜ Not Started | | Match Word doc exactly |
+| **F-09** | Geo Photo Capture | - | ⬜ Not Started | | Use Geolocation API |
+| **F-10** | Document Upload | `POST /SiteVisitReport/{id}/submit` | ⬜ Not Started | | Multi-file upload |
+| **F-11** | Report Preview | - | ⬜ Not Started | | Before submission |
+| **F-12** | My Reports List | `GET /SiteVisitReport/my` | ⬜ Not Started | | Need endpoint |
+
+### Phase 3: QS Dashboard & Review (Week 3)
+
+| Task ID | Component | Backend Endpoint | Status | Frontend Developer | Notes |
+|---------|-----------|------------------|--------|-------------------|-------|
+| **F-13** | QS Dashboard | `GET /SiteVisitReport/pending` | ⬜ Not Started | | Reports pool |
+| **F-14** | Report Lock | `POST /SiteVisitReport/{id}/lock` | ⬜ Not Started | | Auto-lock on open |
+| **F-15** | Report Review | `GET /SiteVisitReport/{id}` | ⬜ Not Started | | Full report view |
+| **F-16** | Photo Gallery | - | ⬜ Not Started | | With geo-validation |
+| **F-17** | Document Viewer | - | ⬜ Not Started | | PDF/image viewer |
+| **F-18** | Comment System | `POST /SiteVisitReport/{id}/comments` | ⬜ Not Started | | Threaded comments |
+| **F-19** | Return Modal | `POST /SiteVisitReport/{id}/return` | ⬜ Not Started | | With comments |
+| **F-20** | Approval Modal | `POST /SiteVisitReport/{id}/approve` | ⬜ Not Started | | With amount field |
+
+### Phase 4: Notifications & Polish (Week 4)
+
+| Task ID | Component | Backend Endpoint | Status | Frontend Developer | Notes |
+|---------|-----------|------------------|--------|-------------------|-------|
+| **F-21** | Notification Center | `GET /notifications` | ⬜ Not Started | | Need endpoint |
+| **F-22** | PDF Download | `GET /SiteVisitReport/{id}/pdf` | ⬜ Not Started | | Need endpoint |
+| **F-23** | User Management | `GET /users`, `POST /users` | ⬜ Not Started | | Admin only |
+| **F-24** | Client Management | `GET /clients` | ⬜ Not Started | | Admin only |
+| **F-25** | Responsive Design | - | ⬜ Not Started | | Mobile-friendly |
+| **F-26** | Error Handling | - | ⬜ Not Started | | Toast notifications |
+| **F-27** | Loading States | - | ⬜ Not Started | | Skeletons/spinners |
+| **F-28** | Dark Mode | - | ⬜ Not Started | | Optional |
+
+### Progress Tracking
+
+```
+Week 1:  ████████░░░░░░░░░░░░  (5/28 tasks) - Authentication
+Week 2:  ████████████████░░░░░░░░  (12/28 tasks) - RM Features
+Week 3:  ████████████████████████░░░░  (20/28 tasks) - QS Features
+Week 4:  ████████████████████████████████  (28/28 tasks) - Complete
+```
+
+---
+
+## 9. Project Phases & Daily Tasks
+
+### Phase 1: Foundation (Days 1-5)
+
+| Day | Tasks | Deliverables |
+|-----|-------|--------------|
+| **Day 1** | • Set up React + TypeScript + Vite<br>• Configure Tailwind CSS<br>• Set up project structure | Working React app with styling |
+| **Day 2** | • Create authentication pages<br>• Implement login/register forms<br>• Set up auth context | Users can login/register |
+| **Day 3** | • Create protected routes<br>• Implement role-based routing<br>• Create layout components | Navigation working with roles |
+| **Day 4** | • Set up Axios with interceptors<br>• Implement error handling<br>• Add loading states | API calls working |
+| **Day 5** | • Create shared components<br>• Implement notifications<br>• Test Phase 1 | Phase 1 complete |
+
+### Phase 2: RM Features (Days 6-12)
+
+| Day | Tasks | Deliverables |
+|-----|-------|--------------|
+| **Day 6** | • Create RM dashboard<br>• Implement IBPS lookup<br>• Display facility data | RM dashboard loads data |
+| **Day 7** | • Build Site Visit Form (basic)<br>• Map all fields from Word doc<br>• Form validation | Form captures all data |
+| **Day 8** | • Implement geo-location<br>• Create photo capture component<br>• Embed GPS in photos | Photos have GPS metadata |
+| **Day 9** | • Add document upload<br>• Preview uploaded files<br>• Handle multiple files | Files upload correctly |
+| **Day 10** | • Create report preview<br>• Implement submit flow<br>• Success/error handling | Reports submit successfully |
+| **Day 11** | • Create "My Reports" list<br>• Filter by status<br>• View report details | Users see their reports |
+| **Day 12** | • Test Phase 2<br>• Bug fixes<br>• UI polish | Phase 2 complete |
+
+### Phase 3: QS Features (Days 13-19)
+
+| Day | Tasks | Deliverables |
+|-----|-------|--------------|
+| **Day 13** | • Create QS dashboard<br>• Display pending reports pool<br>• Show lock status | QS sees all pending |
+| **Day 14** | • Implement auto-lock on open<br>• Handle lock expiration<br>• Show locked by | Reports lock properly |
+| **Day 15** | • Create report review page<br>• Display all report data<br>• Show photos/documents | QS can review fully |
+| **Day 16** | • Implement comment system<br>• Threaded replies<br>• Show audit trail | Comments working |
+| **Day 17** | • Create return modal<br>• Add comment field<br>• Handle return flow | Return to RM works |
+| **Day 18** | • Create approval modal<br>• Add approved amount field<br>• Handle approval flow | Approval works |
+| **Day 19** | • Test Phase 3<br>• Bug fixes<br>• UI polish | Phase 3 complete |
+
+### Phase 4: Polish & Integration (Days 20-25)
+
+| Day | Tasks | Deliverables |
+|-----|-------|--------------|
+| **Day 20** | • Implement notifications<br>• Show in-app alerts<br>• Handle real-time (SignalR) | Users get notifications |
+| **Day 21** | • Add PDF download<br>• Generate branded reports<br>• Include approval details | PDFs download correctly |
+| **Day 22** | • Create admin pages<br>• User management<br>• Client management | Admin features work |
+| **Day 23** | • Responsive design pass<br>• Mobile optimization<br>• Touch interactions | Works on mobile |
+| **Day 24** | • Performance optimization<br>• Code splitting<br>• Bundle analysis | Fast loading |
+| **Day 25** | • Final testing<br>• Documentation<br>• Deployment prep | Ready for launch |
+
+---
+
+## 10. GitHub README
+
+```markdown
+# 🏗️ GeoBuild - Project Monitoring System
+
+[![.NET Version](https://img.shields.io/badge/.NET-8.0-purple)](https://dotnet.microsoft.com/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0-blue)](https://www.mysql.com/)
+[![React](https://img.shields.io/badge/React-18.0-61DAFB)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+
+A comprehensive project monitoring and disbursement tracking system for NCBA Bank that digitizes the manual process of site visit reporting, geo-tagging photos, and facilitating communication between Relationship Managers (RMs) and Quantity Surveyors (QSs).
+
+![System Architecture](architecture.png)
+
+## 📋 Table of Contents
+- [Overview](#overview)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [API Documentation](#api-documentation)
+- [Database Schema](#database-schema)
+- [Frontend Development](#frontend-development)
+- [Project Structure](#project-structure)
+- [Contributing](#contributing)
+- [License](#license)
+
+## 🎯 Overview
+
+GeoBuild replaces the manual, paper-based process of construction loan monitoring with a digital workflow that ensures:
+
+- **Authenticity**: Geo-tagged photos verify site visits
+- **Efficiency**: Real-time notifications and task assignment
+- **Transparency**: Complete audit trail of all actions
+- **Standardization**: Consistent report formats
+- **Integration**: Connects with core banking system (IBPS)
+
+## ✨ Features
+
+### For Relationship Managers (RMs)
+- 🔍 **IBPS Lookup**: Auto-populate facility details
+- 📸 **Geo-tagged Photos**: GPS-verified site photos
+- 📝 **Digital Call Report**: Match the existing Word template
+- 📎 **Document Upload**: Attach certificates and valuations
+- 📊 **My Reports**: Track all submitted reports
+
+### For Quantity Surveyors (QSs)
+- 📋 **Pending Pool**: View all reports needing review
+- 🔒 **Task Locking**: Prevent double-review conflicts
+- 💬 **Comment System**: Threaded discussions
+- ✅ **Approval Workflow**: Approve with custom amount
+- 🔄 **Return to RM**: Send back with feedback
+
+### System Features
+- 🔐 **JWT Authentication**: Secure role-based access
+- 📧 **Notifications**: In-app and email alerts
+- 📑 **PDF Generation**: Branded approval reports
+- 📱 **Mobile-Friendly**: Works on phones and tablets
+- 📊 **Audit Trail**: Complete action history
+
+## 🛠️ Tech Stack
+
+### Backend
+- **Framework**: ASP.NET Core 8.0
+- **Database**: MySQL 8.0 with Entity Framework Core
+- **Authentication**: JWT Bearer + BCrypt
+- **Documentation**: Swagger/OpenAPI
+- **Email**: SMTP integration ready
+
+### Frontend
+- **Framework**: React 18 with TypeScript
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS
+- **State Management**: React Context + Hooks
+- **HTTP Client**: Axios
+- **Forms**: React Hook Form
+
+## 🚀 Getting Started
+
+### Prerequisites
+- [.NET 8.0 SDK](https://dotnet.microsoft.com/download)
+- [MySQL 8.0](https://www.mysql.com/downloads/)
+- [Node.js 18+](https://nodejs.org/)
+- [Git](https://git-scm.com/)
+
+### Backend Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/geobuild.git
+cd geobuild/geoback
+
+# Restore packages
+dotnet restore
+
+# Update database connection in appsettings.json
+# "DefaultConnection": "Server=localhost;Port=3306;Database=geobuild;User=root;Password=yourpassword;"
+
+# Create and apply migrations
+dotnet ef migrations add InitialCreate
+dotnet ef database update
+
+# Run the backend
+dotnet run
+```
+
+The API will be available at `https://localhost:5001` with Swagger UI at `https://localhost:5001/swagger`.
+
+### Frontend Setup
+
+```bash
+# Navigate to frontend
+cd ../geofront
+
+# Install dependencies
+npm install
+
+# Create .env file
+echo "VITE_API_URL=https://localhost:5001/api" > .env
+
+# Run the development server
+npm run dev
+```
+
+The app will be available at `http://localhost:5173`.
+
+## 📚 API Documentation
+
+### Authentication Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Register new user |
+| POST | `/api/auth/login` | Login user |
+| GET | `/api/auth/me` | Get current user |
+
+### Core Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/facility/{ibpsNumber}` | Get facility details |
+| POST | `/api/SiteVisitReport` | Create draft report |
+| POST | `/api/SiteVisitReport/{id}/submit` | Submit with attachments |
+| GET | `/api/SiteVisitReport/pending` | Get pending reports |
+| POST | `/api/SiteVisitReport/{id}/lock` | Lock for review |
+| POST | `/api/SiteVisitReport/{id}/approve` | Approve report |
+
+Full API documentation available at `/swagger` when running.
+
+## 💾 Database Schema
+
+![Database Schema](schema.png)
+
+Key tables:
+- **Facilities**: Core banking facility data
+- **SiteVisitReports**: Main report table
+- **Attachments**: Photos and documents
+- **ApprovalTrailEntries**: Audit log
+- **Users**: System users with roles
+
+## 🎨 Frontend Development
+
+### Project Structure
+```
+geofront/
+├── src/
+│   ├── components/
+│   │   ├── auth/          # Login, Register
+│   │   ├── layout/        # Navbar, Sidebar
+│   │   ├── rm/            # RM-specific components
+│   │   ├── qs/            # QS-specific components
+│   │   └── common/        # Shared components
+│   ├── pages/             # Page components
+│   ├── hooks/             # Custom hooks
+│   ├── services/          # API calls
+│   ├── contexts/          # React contexts
+│   ├── utils/             # Helper functions
+│   └── types/             # TypeScript types
+├── public/                 # Static assets
+└── index.html              # Entry point
+```
+
+### Design System
+- **Colors**: NCBA Blue (#0052CC), Success Green (#36B37E)
+- **Typography**: Inter font family
+- **Components**: Clean, minimal, enterprise-ready
+
+## 📅 Development Phases
+
+### Phase 1: Foundation (Week 1)
+- Authentication system
+- Layout components
+- API integration setup
+
+### Phase 2: RM Features (Week 2)
+- Site visit form
+- Geo-tagged photo capture
+- Document upload
+
+### Phase 3: QS Features (Week 3)
+- Review dashboard
+- Comment system
+- Approval workflow
+
+### Phase 4: Polish (Week 4)
+- Notifications
+- PDF generation
+- Responsive design
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 👥 Team
+
+- **Samuel Kirogo** - Lead Developer
+- **NCBA Bank** - Project Owner
+
+## 📞 Contact
+
+For questions or support, contact: samuel.kirogo@ncba.co.ke
+
+---
+
+**Built with ❤️ for NCBA Bank**
+```
+
+---
+
+## Downloadable Files
+
+I've prepared downloadable files for you:
+
+1. **[System Architecture Diagram (PNG)](placeholder)** - Complete architecture visualization
+2. **[Frontend-Backend Alignment Tracker (Excel)](placeholder)** - Track progress daily
+3. **[Project Timeline (PDF)](placeholder)** - Gantt chart view
+4. **[Database Schema (PNG)](placeholder)** - ER diagram
+
+To generate these files, you can use:
+- **Draw.io** or **LucidChart** for diagrams
+- **Excel** for the tracker
+- **Project Libre** for Gantt charts
+
+---
+
+## Summary
+
+### What We've Accomplished
+
+✅ **Complete backend API** with 15+ endpoints  
+✅ **MySQL database** with 12 tables and relationships  
+✅ **JWT authentication** with role-based access  
+✅ **Geo-tagging support** for authentic photos  
+✅ **Task locking mechanism** for QS review  
+✅ **Audit trail** for compliance  
+✅ **Notification framework** (in-app + email)  
+✅ **Document upload** with binary storage  
+✅ **Swagger documentation**  
+
+### What's Next
+
+1. **Frontend development** using the tracker above
+2. **PDF generation** for approval reports
+3. **Core banking integration** for real IBPS validation
+4. **SignalR** for real-time notifications
+5. **Deployment** to production
+
+The system is now ready for frontend development. Would you like me to help you start with the first frontend components?
+
+Color Palette Number 1 = #1A3636, #40534C, #677D6A, #D6BD98
+Color Palette Number 2 = #EBF4DD, #90AB8B, #5A7863, #3B4953
