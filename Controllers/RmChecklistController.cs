@@ -1,4 +1,4 @@
-//Controllers/RmChecklistController.cs
+// Controllers/RmChecklistController.cs
 using System.Text.Json;
 using geoback.Data;
 using geoback.DTOs;
@@ -15,6 +15,7 @@ public class RmChecklistController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IWebHostEnvironment _environment;
+    private readonly JsonSerializerOptions _jsonOptions;
 
     public class UploadChecklistPhotoRequest
     {
@@ -27,6 +28,11 @@ public class RmChecklistController : ControllerBase
     {
         _context = context;
         _environment = environment;
+        _jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true
+        };
     }
 
     [HttpPost("photos")]
@@ -149,7 +155,56 @@ public class RmChecklistController : ControllerBase
             Documents = DeserializeDocuments(c.DocumentsJson),
             CreatedAt = c.CreatedAt,
             UpdatedAt = c.UpdatedAt,
+            SiteVisitForm = DeserializeSiteVisitForm(c.SiteVisitFormJson)
         }).ToList();
+
+        return Ok(result);
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<ChecklistResponseDto>> GetChecklistById(Guid id)
+    {
+        var checklist = await _context.Checklists
+            .FirstOrDefaultAsync(c => c.Id == id);
+
+        if (checklist == null)
+        {
+            return NotFound(new { message = "Checklist not found." });
+        }
+
+        // Get RM info if assigned
+        ChecklistUserRefDto? assignedRM = null;
+        if (checklist.AssignedToRM.HasValue)
+        {
+            var rm = await _context.Users
+                .Where(u => u.Id == checklist.AssignedToRM.Value)
+                .Select(u => new ChecklistUserRefDto
+                {
+                    Id = u.Id,
+                    Name = $"{u.FirstName} {u.LastName}".Trim(),
+                    Email = u.Email,
+                })
+                .FirstOrDefaultAsync();
+            assignedRM = rm;
+        }
+
+        var result = new ChecklistResponseDto
+        {
+            Id = checklist.Id,
+            DclNo = checklist.DclNo,
+            CustomerId = checklist.CustomerId,
+            CustomerNumber = checklist.CustomerNumber,
+            CustomerName = checklist.CustomerName,
+            CustomerEmail = checklist.CustomerEmail,
+            ProjectName = checklist.ProjectName,
+            IbpsNo = checklist.IbpsNo,
+            Status = checklist.Status,
+            AssignedToRM = assignedRM,
+            Documents = DeserializeDocuments(checklist.DocumentsJson),
+            CreatedAt = checklist.CreatedAt,
+            UpdatedAt = checklist.UpdatedAt,
+            SiteVisitForm = DeserializeSiteVisitForm(checklist.SiteVisitFormJson)
+        };
 
         return Ok(result);
     }
@@ -194,7 +249,10 @@ public class RmChecklistController : ControllerBase
             IbpsNo = payload.IbpsNo,
             AssignedToRM = payload.AssignedToRM,
             Status = "pending",
-            DocumentsJson = JsonSerializer.Serialize(payload.Documents),
+            DocumentsJson = JsonSerializer.Serialize(payload.Documents, _jsonOptions),
+            SiteVisitFormJson = payload.SiteVisitForm != null 
+                ? JsonSerializer.Serialize(payload.SiteVisitForm, _jsonOptions)
+                : null,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
         };
@@ -202,7 +260,7 @@ public class RmChecklistController : ControllerBase
         _context.Checklists.Add(checklist);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetAllRmChecklists), new { id = checklist.Id }, new
+        return CreatedAtAction(nameof(GetChecklistById), new { id = checklist.Id }, new
         {
             message = "Checklist created successfully",
             checklist = new
@@ -257,7 +315,10 @@ public class RmChecklistController : ControllerBase
         checklist.IbpsNo = payload.IbpsNo.Trim();
         checklist.AssignedToRM = payload.AssignedToRM;
         checklist.Status = normalizedStatus;
-        checklist.DocumentsJson = JsonSerializer.Serialize(payload.Documents);
+        checklist.DocumentsJson = JsonSerializer.Serialize(payload.Documents, _jsonOptions);
+        checklist.SiteVisitFormJson = payload.SiteVisitForm != null 
+            ? JsonSerializer.Serialize(payload.SiteVisitForm, _jsonOptions)
+            : checklist.SiteVisitFormJson;
         checklist.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
@@ -298,6 +359,23 @@ public class RmChecklistController : ControllerBase
         catch
         {
             return new List<ChecklistDocumentCategoryDto>();
+        }
+    }
+
+    private static object? DeserializeSiteVisitForm(string? siteVisitFormJson)
+    {
+        if (string.IsNullOrWhiteSpace(siteVisitFormJson) || siteVisitFormJson == "null")
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<object>(siteVisitFormJson);
+        }
+        catch
+        {
+            return null;
         }
     }
 

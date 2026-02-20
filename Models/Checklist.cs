@@ -1,3 +1,4 @@
+// GeoBack/Models/Checklist.cs
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -25,6 +26,9 @@ namespace geoback.Models
 
         [Required]
         public string DocumentsJson { get; set; } = "[]";
+
+        // NEW: Add this field to store the site visit form data
+        public string? SiteVisitFormJson { get; set; } = "null";
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

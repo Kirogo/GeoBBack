@@ -64,7 +64,7 @@ namespace geoback.Migrations
 
                     b.HasIndex("Timestamp");
 
-                    b.ToTable("ApprovalTrailEntries");
+                    b.ToTable("ApprovalTrailEntries", (string)null);
                 });
 
             modelBuilder.Entity("geoback.Models.Attachment", b =>
@@ -113,7 +113,7 @@ namespace geoback.Migrations
 
                     b.HasIndex("SiteVisitReportId");
 
-                    b.ToTable("Attachments");
+                    b.ToTable("Attachments", (string)null);
                 });
 
             modelBuilder.Entity("geoback.Models.Checklist", b =>
@@ -161,6 +161,9 @@ namespace geoback.Migrations
                         .HasColumnType("longtext")
                         .HasColumnName("LoanType");
 
+                    b.Property<string>("SiteVisitFormJson")
+                        .HasColumnType("longtext");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("longtext");
@@ -173,7 +176,7 @@ namespace geoback.Migrations
                     b.HasIndex("DclNo")
                         .IsUnique();
 
-                    b.ToTable("Checklists");
+                    b.ToTable("Checklists", (string)null);
                 });
 
             modelBuilder.Entity("geoback.Models.Client", b =>
@@ -227,7 +230,7 @@ namespace geoback.Migrations
                     b.HasIndex("CustomerNumber")
                         .IsUnique();
 
-                    b.ToTable("Clients");
+                    b.ToTable("Clients", (string)null);
                 });
 
             modelBuilder.Entity("geoback.Models.DrawdownTranche", b =>
@@ -262,7 +265,7 @@ namespace geoback.Migrations
 
                     b.HasIndex("FacilityId");
 
-                    b.ToTable("DrawdownTranches");
+                    b.ToTable("DrawdownTranches", (string)null);
                 });
 
             modelBuilder.Entity("geoback.Models.Facility", b =>
@@ -319,7 +322,7 @@ namespace geoback.Migrations
                     b.HasIndex("IBPSNumber")
                         .IsUnique();
 
-                    b.ToTable("Facilities");
+                    b.ToTable("Facilities", (string)null);
                 });
 
             modelBuilder.Entity("geoback.Models.Issue", b =>
@@ -380,7 +383,7 @@ namespace geoback.Migrations
 
                     b.HasIndex("SiteVisitReportId");
 
-                    b.ToTable("Issues");
+                    b.ToTable("Issues", (string)null);
                 });
 
             modelBuilder.Entity("geoback.Models.Milestone", b =>
@@ -413,7 +416,7 @@ namespace geoback.Migrations
 
                     b.HasIndex("FacilityId");
 
-                    b.ToTable("Milestones");
+                    b.ToTable("Milestones", (string)null);
                 });
 
             modelBuilder.Entity("geoback.Models.ReportComment", b =>
@@ -455,7 +458,7 @@ namespace geoback.Migrations
 
                     b.HasIndex("SiteVisitReportId");
 
-                    b.ToTable("ReportComments");
+                    b.ToTable("ReportComments", (string)null);
                 });
 
             modelBuilder.Entity("geoback.Models.ReportPhoto", b =>
@@ -523,7 +526,7 @@ namespace geoback.Migrations
 
                     b.HasIndex("SiteVisitReportId");
 
-                    b.ToTable("ReportPhotos");
+                    b.ToTable("ReportPhotos", (string)null);
                 });
 
             modelBuilder.Entity("geoback.Models.SiteVisitReport", b =>
@@ -712,7 +715,7 @@ namespace geoback.Migrations
 
                     b.HasIndex("Status");
 
-                    b.ToTable("SiteVisitReports");
+                    b.ToTable("SiteVisitReports", (string)null);
                 });
 
             modelBuilder.Entity("geoback.Models.User", b =>
@@ -762,7 +765,7 @@ namespace geoback.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("geoback.Models.WorkProgress", b =>
@@ -802,7 +805,7 @@ namespace geoback.Migrations
 
                     b.HasIndex("SiteVisitReportId");
 
-                    b.ToTable("WorkProgress");
+                    b.ToTable("WorkProgress", (string)null);
                 });
 
             modelBuilder.Entity("geoback.Models.ApprovalTrailEntry", b =>

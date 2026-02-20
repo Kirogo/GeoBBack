@@ -1,3 +1,4 @@
+// GeoBack/DTOs/ChecklistDtos.cs
 using System.Text.Json.Serialization;
 
 namespace geoback.DTOs
@@ -30,6 +31,9 @@ namespace geoback.DTOs
         public string? IbpsNo { get; set; }
         public Guid? AssignedToRM { get; set; }
         public List<ChecklistDocumentCategoryDto> Documents { get; set; } = new();
+        
+        // NEW: Add site visit form data
+        public SiteVisitFormDto? SiteVisitForm { get; set; }
     }
 
     public class UpdateChecklistDto
@@ -47,6 +51,9 @@ namespace geoback.DTOs
         public Guid? AssignedToRM { get; set; }
         public string? Status { get; set; }
         public List<ChecklistDocumentCategoryDto> Documents { get; set; } = new();
+        
+        // NEW: Add site visit form data
+        public SiteVisitFormDto? SiteVisitForm { get; set; }
     }
 
     public class ChecklistUserRefDto
@@ -64,6 +71,10 @@ namespace geoback.DTOs
         public Guid MongoLikeId => Id;
 
         public string DclNo { get; set; } = string.Empty;
+        
+        [JsonPropertyName("callReportNo")]
+        public string CallReportNo => DclNo;
+
         public string? CustomerId { get; set; }
         public string CustomerNumber { get; set; } = string.Empty;
         public string CustomerName { get; set; } = string.Empty;
@@ -79,5 +90,8 @@ namespace geoback.DTOs
         public List<ChecklistDocumentCategoryDto> Documents { get; set; } = new();
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
+        
+        // NEW: Add site visit form data to response
+        public object? SiteVisitForm { get; set; }
     }
 }
