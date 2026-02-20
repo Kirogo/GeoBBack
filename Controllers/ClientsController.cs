@@ -1,8 +1,10 @@
-//geo-back/Controllers/ClientsController.cs
+//Controllers/ClientsController.cs
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using geoback.Data;
 using geoback.Models;
+using CreateClientRequestDto = geoback.DTOs.CreateClientRequestDto;
+using UpdateClientRequestDto = geoback.DTOs.UpdateClientRequestDto;
 
 namespace geoback.Controllers;
 
@@ -130,29 +132,46 @@ public class ClientsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<Client>> CreateClient(Client client)
+    public async Task<ActionResult<Client>> CreateClient([FromBody] CreateClientRequestDto payload)
     {
         try 
         {
-            if (string.IsNullOrWhiteSpace(client.CustomerId) ||
-                string.IsNullOrWhiteSpace(client.Name) ||
-                string.IsNullOrWhiteSpace(client.CustomerNumber) ||
-                string.IsNullOrWhiteSpace(client.Email))
+            if (!ModelState.IsValid)
+            {
+                return ValidationProblem(ModelState);
+            }
+
+            if (string.IsNullOrWhiteSpace(payload.CustomerId) ||
+                string.IsNullOrWhiteSpace(payload.Name) ||
+                string.IsNullOrWhiteSpace(payload.CustomerNumber) ||
+                string.IsNullOrWhiteSpace(payload.Email))
             {
                 return BadRequest(new { message = "Customer ID, Customer Name, Customer Number, and Customer Email are required." });
             }
 
-            // Check if customer ID already exists
-            if (await _context.Clients.AnyAsync(c => c.CustomerId == client.CustomerId))
+            var normalizedCustomerId = payload.CustomerId.Trim();
+            var normalizedCustomerNumber = payload.CustomerNumber.Trim();
+
+            if (await _context.Clients.AnyAsync(c => c.CustomerId == normalizedCustomerId))
             {
-                return BadRequest(new { message = $"A client with customer ID '{client.CustomerId}' already exists." });
+                return Conflict(new { message = "Customer ID already exists." });
             }
 
-            // Check if customer number already exists
-            if (await _context.Clients.AnyAsync(c => c.CustomerNumber == client.CustomerNumber))
+            if (await _context.Clients.AnyAsync(c => c.CustomerNumber == normalizedCustomerNumber))
             {
-                return BadRequest(new { message = $"A client with customer number '{client.CustomerNumber}' already exists." });
+                return Conflict(new { message = "Customer Number already exists." });
             }
+
+            var client = new Client
+            {
+                CustomerId = normalizedCustomerId,
+                CustomerNumber = normalizedCustomerNumber,
+                Name = payload.Name.Trim(),
+                Email = payload.Email.Trim(),
+                Phone = string.IsNullOrWhiteSpace(payload.Phone) ? null : payload.Phone.Trim(),
+                Address = string.IsNullOrWhiteSpace(payload.Address) ? null : payload.Address.Trim(),
+                ProjectName = string.IsNullOrWhiteSpace(payload.ProjectName) ? null : payload.ProjectName.Trim()
+            };
 
             // Generate a new ID if not provided
             if (client.Id == Guid.Empty)
@@ -170,37 +189,51 @@ public class ClientsController : ControllerBase
 
             return CreatedAtAction(nameof(GetClient), new { id = client.Id }, client);
         }
-        catch (DbUpdateException ex)
-        {
-            _logger.LogError(ex, "Database error creating client: {ClientData}", new { client.CustomerId, client.CustomerNumber, client.Name });
-            
-            // Check for unique constraint violations
-            if (ex.InnerException?.Message.Contains("Duplicate", StringComparison.OrdinalIgnoreCase) ?? false)
-            {
-                return BadRequest(new { message = "A client with this Customer ID or Customer Number already exists." });
-            }
-            
-            return StatusCode(500, new { message = "Database error occurred while creating the client. Please try again." });
-        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating client: {ExceptionMessage}", ex.Message);
-            return StatusCode(500, new { message = $"An error occurred while creating the client: {ex.Message}" });
+            _logger.LogError(ex, "Error creating client");
+            return StatusCode(500, new { message = "An error occurred while creating the client" });
         }
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateClient(Guid id, Client client)
+    public async Task<IActionResult> UpdateClient(Guid id, [FromBody] UpdateClientRequestDto payload)
     {
-        if (id != client.Id)
-        {
-            return BadRequest(new { message = "ID mismatch" });
-        }
-
         try
         {
+            var client = await _context.Clients.FindAsync(id);
+            if (client == null)
+            {
+                return NotFound(new { message = $"Client with ID {id} not found" });
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return ValidationProblem(ModelState);
+            }
+
+            var nextCustomerId = string.IsNullOrWhiteSpace(payload.CustomerId) ? client.CustomerId : payload.CustomerId.Trim();
+            var nextCustomerNumber = string.IsNullOrWhiteSpace(payload.CustomerNumber) ? client.CustomerNumber : payload.CustomerNumber.Trim();
+
+            if (await _context.Clients.AnyAsync(c => c.Id != id && c.CustomerId == nextCustomerId))
+            {
+                return Conflict(new { message = "Customer ID already exists." });
+            }
+
+            if (await _context.Clients.AnyAsync(c => c.Id != id && c.CustomerNumber == nextCustomerNumber))
+            {
+                return Conflict(new { message = "Customer Number already exists." });
+            }
+
+            if (!string.IsNullOrWhiteSpace(payload.CustomerId)) client.CustomerId = payload.CustomerId.Trim();
+            if (!string.IsNullOrWhiteSpace(payload.CustomerNumber)) client.CustomerNumber = payload.CustomerNumber.Trim();
+            if (!string.IsNullOrWhiteSpace(payload.Name)) client.Name = payload.Name.Trim();
+            if (!string.IsNullOrWhiteSpace(payload.Email)) client.Email = payload.Email.Trim();
+            if (payload.Phone is not null) client.Phone = string.IsNullOrWhiteSpace(payload.Phone) ? null : payload.Phone.Trim();
+            if (payload.Address is not null) client.Address = string.IsNullOrWhiteSpace(payload.Address) ? null : payload.Address.Trim();
+            if (payload.ProjectName is not null) client.ProjectName = string.IsNullOrWhiteSpace(payload.ProjectName) ? null : payload.ProjectName.Trim();
+
             client.UpdatedAt = DateTime.UtcNow;
-            _context.Entry(client).State = EntityState.Modified;
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Client updated successfully: {ClientId}", id);

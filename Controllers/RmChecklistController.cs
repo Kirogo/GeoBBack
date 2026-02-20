@@ -1,3 +1,4 @@
+//Controllers/RmChecklistController.cs
 using System.Text.Json;
 using geoback.Data;
 using geoback.DTOs;
@@ -15,6 +16,13 @@ public class RmChecklistController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly IWebHostEnvironment _environment;
 
+    public class UploadChecklistPhotoRequest
+    {
+        public IFormFile? File { get; set; }
+        public string? Section { get; set; }
+        public int? Slot { get; set; }
+    }
+
     public RmChecklistController(ApplicationDbContext context, IWebHostEnvironment environment)
     {
         _context = context;
@@ -23,8 +31,13 @@ public class RmChecklistController : ControllerBase
 
     [HttpPost("photos")]
     [RequestSizeLimit(10_000_000)]
-    public async Task<ActionResult> UploadChecklistPhoto([FromForm] IFormFile file, [FromForm] string? section, [FromForm] int? slot)
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult> UploadChecklistPhoto([FromForm] UploadChecklistPhotoRequest request)
     {
+        var file = request.File;
+        var section = request.Section;
+        var slot = request.Slot;
+
         if (file == null || file.Length == 0)
         {
             return BadRequest(new { message = "Photo file is required." });
