@@ -276,6 +276,7 @@ public class RmChecklistController : ControllerBase
                 checklist.IbpsNo,
                 checklist.Status,
                 documents = payload.Documents,
+                siteVisitForm = payload.SiteVisitForm,
                 checklist.CreatedAt,
                 checklist.UpdatedAt,
             },
@@ -296,33 +297,57 @@ public class RmChecklistController : ControllerBase
             ? payload.ProjectName
             : payload.LoanType ?? string.Empty;
 
-        if (string.IsNullOrWhiteSpace(payload.CustomerNumber) ||
-            string.IsNullOrWhiteSpace(payload.CustomerName) ||
-            string.IsNullOrWhiteSpace(resolvedProjectName) ||
-            payload.AssignedToRM == null ||
-            string.IsNullOrWhiteSpace(payload.IbpsNo))
+        // Only validate required fields if they are provided in the payload
+        // This allows partial updates for draft saving
+        if (!string.IsNullOrWhiteSpace(payload.CustomerNumber) ||
+            !string.IsNullOrWhiteSpace(payload.CustomerName) ||
+            !string.IsNullOrWhiteSpace(resolvedProjectName) ||
+            payload.AssignedToRM != null ||
+            !string.IsNullOrWhiteSpace(payload.IbpsNo))
         {
-            return BadRequest(new { message = "Please fill all required fields." });
+            // Update only the fields that are provided
+            if (!string.IsNullOrWhiteSpace(payload.CustomerNumber))
+                checklist.CustomerNumber = payload.CustomerNumber.Trim();
+            
+            if (!string.IsNullOrWhiteSpace(payload.CustomerName))
+                checklist.CustomerName = payload.CustomerName.Trim();
+            
+            if (!string.IsNullOrWhiteSpace(payload.CustomerEmail))
+                checklist.CustomerEmail = payload.CustomerEmail;
+            
+            if (!string.IsNullOrWhiteSpace(resolvedProjectName))
+                checklist.ProjectName = resolvedProjectName.Trim();
+            
+            if (!string.IsNullOrWhiteSpace(payload.IbpsNo))
+                checklist.IbpsNo = payload.IbpsNo.Trim();
+            
+            if (payload.AssignedToRM != null)
+                checklist.AssignedToRM = payload.AssignedToRM;
         }
 
-        var normalizedStatus = NormalizeWorkflowStatus(payload.Status, checklist.Status);
+        // Update status if provided
+        if (!string.IsNullOrWhiteSpace(payload.Status))
+        {
+            checklist.Status = NormalizeWorkflowStatus(payload.Status, checklist.Status);
+        }
 
-        checklist.CustomerId = payload.CustomerId;
-        checklist.CustomerNumber = payload.CustomerNumber.Trim();
-        checklist.CustomerName = payload.CustomerName.Trim();
-        checklist.CustomerEmail = payload.CustomerEmail;
-        checklist.ProjectName = resolvedProjectName.Trim();
-        checklist.IbpsNo = payload.IbpsNo.Trim();
-        checklist.AssignedToRM = payload.AssignedToRM;
-        checklist.Status = normalizedStatus;
-        checklist.DocumentsJson = JsonSerializer.Serialize(payload.Documents, _jsonOptions);
-        checklist.SiteVisitFormJson = payload.SiteVisitForm != null 
-            ? JsonSerializer.Serialize(payload.SiteVisitForm, _jsonOptions)
-            : checklist.SiteVisitFormJson;
+        // Update documents if provided
+        if (payload.Documents != null && payload.Documents.Any())
+        {
+            checklist.DocumentsJson = JsonSerializer.Serialize(payload.Documents, _jsonOptions);
+        }
+
+        // Update site visit form if provided
+        if (payload.SiteVisitForm != null)
+        {
+            checklist.SiteVisitFormJson = JsonSerializer.Serialize(payload.SiteVisitForm, _jsonOptions);
+        }
+
         checklist.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
+        // Return the updated checklist
         return Ok(new
         {
             message = "Checklist updated successfully",
@@ -338,7 +363,8 @@ public class RmChecklistController : ControllerBase
                 loanType = checklist.ProjectName,
                 checklist.IbpsNo,
                 checklist.Status,
-                documents = payload.Documents,
+                documents = DeserializeDocuments(checklist.DocumentsJson),
+                siteVisitForm = DeserializeSiteVisitForm(checklist.SiteVisitFormJson),
                 checklist.CreatedAt,
                 checklist.UpdatedAt,
             },
@@ -406,6 +432,7 @@ public class RmChecklistController : ControllerBase
             "draft" => "draft",
             "pending_qs_review" => "pending_qs_review",
             "pendingqsreview" => "pending_qs_review",
+            "submitted" => "submitted",
             _ => string.IsNullOrWhiteSpace(currentStatus) ? "pending" : currentStatus,
         };
     }

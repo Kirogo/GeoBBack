@@ -1,3 +1,4 @@
+// Models/Client.cs
 using System.ComponentModel.DataAnnotations;
 
 namespace geoback.Models
