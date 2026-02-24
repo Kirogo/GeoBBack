@@ -67,9 +67,4 @@ namespace geoback.DTOs
         public string CommentText { get; set; } = string.Empty;
     }
 
-    public class LockReportDto
-    {
-        public int ReportId { get; set; }
-        public int? LockDurationMinutes { get; set; } = 120;
-    }
 }

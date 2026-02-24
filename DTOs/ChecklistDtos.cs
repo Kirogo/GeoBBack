@@ -1,4 +1,4 @@
-// GeoBack/DTOs/ChecklistDtos.cs
+// DTOs/ChecklistDtos.cs
 using System.Text.Json.Serialization;
 
 namespace geoback.DTOs
@@ -32,8 +32,7 @@ namespace geoback.DTOs
         public Guid? AssignedToRM { get; set; }
         public List<ChecklistDocumentCategoryDto> Documents { get; set; } = new();
         
-        // NEW: Add site visit form data
-        public SiteVisitFormDto? SiteVisitForm { get; set; }
+        public object? SiteVisitForm { get; set; }
     }
 
     public class UpdateChecklistDto
@@ -52,8 +51,7 @@ namespace geoback.DTOs
         public string? Status { get; set; }
         public List<ChecklistDocumentCategoryDto> Documents { get; set; } = new();
         
-        // NEW: Add site visit form data
-        public SiteVisitFormDto? SiteVisitForm { get; set; }
+        public object? SiteVisitForm { get; set; }
     }
 
     public class ChecklistUserRefDto
@@ -91,7 +89,26 @@ namespace geoback.DTOs
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         
-        // NEW: Add site visit form data to response
         public object? SiteVisitForm { get; set; }
+        
+        // Lock fields for response
+        public bool IsLocked { get; set; }
+        public ChecklistUserRefDto? LockedBy { get; set; }
+        public DateTime? LockedAt { get; set; }
+    }
+
+    // Lock DTOs
+    public class LockReportDto
+    {
+        public Guid ReportId { get; set; }
+        public Guid UserId { get; set; }
+        public string UserName { get; set; } = string.Empty;
+        public int? LockDurationMinutes { get; set; }
+    }
+
+    public class UnlockReportDto
+    {
+        public Guid ReportId { get; set; }
+        public Guid UserId { get; set; }
     }
 }

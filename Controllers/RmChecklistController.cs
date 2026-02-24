@@ -155,7 +155,15 @@ public class RmChecklistController : ControllerBase
             Documents = DeserializeDocuments(c.DocumentsJson),
             CreatedAt = c.CreatedAt,
             UpdatedAt = c.UpdatedAt,
-            SiteVisitForm = DeserializeSiteVisitForm(c.SiteVisitFormJson)
+            SiteVisitForm = DeserializeSiteVisitForm(c.SiteVisitFormJson),
+            // Add lock info
+            IsLocked = c.IsLocked,
+            LockedBy = c.LockedByUserId.HasValue ? new ChecklistUserRefDto
+            {
+                Id = c.LockedByUserId.Value,
+                Name = c.LockedByUserName ?? "Unknown"
+            } : null,
+            LockedAt = c.LockedAt
         }).ToList();
 
         return Ok(result);
@@ -203,7 +211,15 @@ public class RmChecklistController : ControllerBase
             Documents = DeserializeDocuments(checklist.DocumentsJson),
             CreatedAt = checklist.CreatedAt,
             UpdatedAt = checklist.UpdatedAt,
-            SiteVisitForm = DeserializeSiteVisitForm(checklist.SiteVisitFormJson)
+            SiteVisitForm = DeserializeSiteVisitForm(checklist.SiteVisitFormJson),
+            // Add lock info
+            IsLocked = checklist.IsLocked,
+            LockedBy = checklist.LockedByUserId.HasValue ? new ChecklistUserRefDto
+            {
+                Id = checklist.LockedByUserId.Value,
+                Name = checklist.LockedByUserName ?? "Unknown"
+            } : null,
+            LockedAt = checklist.LockedAt
         };
 
         return Ok(result);
@@ -250,9 +266,10 @@ public class RmChecklistController : ControllerBase
             AssignedToRM = payload.AssignedToRM,
             Status = "pending",
             DocumentsJson = JsonSerializer.Serialize(payload.Documents, _jsonOptions),
-            SiteVisitFormJson = payload.SiteVisitForm != null 
+            SiteVisitFormJson = payload.SiteVisitForm != null
                 ? JsonSerializer.Serialize(payload.SiteVisitForm, _jsonOptions)
                 : null,
+            IsLocked = false,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
         };
@@ -277,6 +294,7 @@ public class RmChecklistController : ControllerBase
                 checklist.Status,
                 documents = payload.Documents,
                 siteVisitForm = payload.SiteVisitForm,
+                checklist.IsLocked,
                 checklist.CreatedAt,
                 checklist.UpdatedAt,
             },
@@ -297,33 +315,24 @@ public class RmChecklistController : ControllerBase
             ? payload.ProjectName
             : payload.LoanType ?? string.Empty;
 
-        // Only validate required fields if they are provided in the payload
-        // This allows partial updates for draft saving
-        if (!string.IsNullOrWhiteSpace(payload.CustomerNumber) ||
-            !string.IsNullOrWhiteSpace(payload.CustomerName) ||
-            !string.IsNullOrWhiteSpace(resolvedProjectName) ||
-            payload.AssignedToRM != null ||
-            !string.IsNullOrWhiteSpace(payload.IbpsNo))
-        {
-            // Update only the fields that are provided
-            if (!string.IsNullOrWhiteSpace(payload.CustomerNumber))
-                checklist.CustomerNumber = payload.CustomerNumber.Trim();
-            
-            if (!string.IsNullOrWhiteSpace(payload.CustomerName))
-                checklist.CustomerName = payload.CustomerName.Trim();
-            
-            if (!string.IsNullOrWhiteSpace(payload.CustomerEmail))
-                checklist.CustomerEmail = payload.CustomerEmail;
-            
-            if (!string.IsNullOrWhiteSpace(resolvedProjectName))
-                checklist.ProjectName = resolvedProjectName.Trim();
-            
-            if (!string.IsNullOrWhiteSpace(payload.IbpsNo))
-                checklist.IbpsNo = payload.IbpsNo.Trim();
-            
-            if (payload.AssignedToRM != null)
-                checklist.AssignedToRM = payload.AssignedToRM;
-        }
+        // Update only the fields that are provided
+        if (!string.IsNullOrWhiteSpace(payload.CustomerNumber))
+            checklist.CustomerNumber = payload.CustomerNumber.Trim();
+
+        if (!string.IsNullOrWhiteSpace(payload.CustomerName))
+            checklist.CustomerName = payload.CustomerName.Trim();
+
+        if (!string.IsNullOrWhiteSpace(payload.CustomerEmail))
+            checklist.CustomerEmail = payload.CustomerEmail;
+
+        if (!string.IsNullOrWhiteSpace(resolvedProjectName))
+            checklist.ProjectName = resolvedProjectName.Trim();
+
+        if (!string.IsNullOrWhiteSpace(payload.IbpsNo))
+            checklist.IbpsNo = payload.IbpsNo.Trim();
+
+        if (payload.AssignedToRM != null)
+            checklist.AssignedToRM = payload.AssignedToRM;
 
         // Update status if provided
         if (!string.IsNullOrWhiteSpace(payload.Status))
@@ -347,7 +356,6 @@ public class RmChecklistController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        // Return the updated checklist
         return Ok(new
         {
             message = "Checklist updated successfully",
@@ -365,9 +373,138 @@ public class RmChecklistController : ControllerBase
                 checklist.Status,
                 documents = DeserializeDocuments(checklist.DocumentsJson),
                 siteVisitForm = DeserializeSiteVisitForm(checklist.SiteVisitFormJson),
+                checklist.IsLocked,
+                checklist.LockedByUserId,
+                checklist.LockedByUserName,
+                checklist.LockedAt,
                 checklist.CreatedAt,
                 checklist.UpdatedAt,
             },
+        });
+    }
+
+    // Lock endpoints
+    [HttpPost("{id:guid}/lock")]
+    public async Task<ActionResult> LockReport(Guid id, [FromBody] LockReportDto payload)
+    {
+        var checklist = await _context.Checklists.FirstOrDefaultAsync(c => c.Id == id);
+
+        if (checklist == null)
+        {
+            return NotFound(new { message = "Checklist not found." });
+        }
+
+        // Check if already locked by someone else
+        if (checklist.IsLocked && checklist.LockedByUserId != payload.UserId)
+        {
+            return Conflict(new
+            {
+                message = "Report is already locked by another user",
+                lockedBy = checklist.LockedByUserName,
+                lockedAt = checklist.LockedAt
+            });
+        }
+
+        // If it's locked by the same user, just return success (already locked)
+        if (checklist.IsLocked && checklist.LockedByUserId == payload.UserId)
+        {
+            return Ok(new
+            {
+                message = "Report already locked by you",
+                lockInfo = new
+                {
+                    isLocked = checklist.IsLocked,
+                    lockedBy = new
+                    {
+                        id = checklist.LockedByUserId,
+                        name = checklist.LockedByUserName
+                    },
+                    lockedAt = checklist.LockedAt
+                }
+            });
+        }
+
+        // Lock the report
+        checklist.IsLocked = true;
+        checklist.LockedByUserId = payload.UserId;
+        checklist.LockedByUserName = payload.UserName;
+        checklist.LockedAt = DateTime.UtcNow;
+        checklist.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Report locked successfully",
+            lockInfo = new
+            {
+                isLocked = checklist.IsLocked,
+                lockedBy = new
+                {
+                    id = checklist.LockedByUserId,
+                    name = checklist.LockedByUserName
+                },
+                lockedAt = checklist.LockedAt
+            }
+        });
+    }
+
+    [HttpPost("{id:guid}/unlock")]
+    public async Task<ActionResult> UnlockReport(Guid id, [FromBody] UnlockReportDto payload)
+    {
+        var checklist = await _context.Checklists.FirstOrDefaultAsync(c => c.Id == id);
+
+        if (checklist == null)
+        {
+            return NotFound(new { message = "Checklist not found." });
+        }
+
+        // Only allow unlock by the same user
+        if (checklist.LockedByUserId != payload.UserId)
+        {
+            return Unauthorized(new { message = "You cannot unlock a report locked by another user" });
+        }
+
+        // Unlock the report
+        checklist.IsLocked = false;
+        checklist.LockedByUserId = null;
+        checklist.LockedByUserName = null;
+        checklist.LockedAt = null;
+        checklist.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Report unlocked successfully" });
+    }
+
+    [HttpGet("{id:guid}/lock-status")]
+    public async Task<ActionResult> GetLockStatus(Guid id)
+    {
+        var checklist = await _context.Checklists
+            .Where(c => c.Id == id)
+            .Select(c => new
+            {
+                c.Id,
+                c.IsLocked,
+                LockedBy = c.LockedByUserId.HasValue ? new
+                {
+                    id = c.LockedByUserId,
+                    name = c.LockedByUserName
+                } : null,
+                c.LockedAt
+            })
+            .FirstOrDefaultAsync();
+
+        if (checklist == null)
+        {
+            return NotFound(new { message = "Checklist not found." });
+        }
+
+        return Ok(new
+        {
+            isLocked = checklist.IsLocked,
+            lockedBy = checklist.LockedBy,
+            lockedAt = checklist.LockedAt
         });
     }
 

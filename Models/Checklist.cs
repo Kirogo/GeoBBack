@@ -27,8 +27,13 @@ namespace geoback.Models
         [Required]
         public string DocumentsJson { get; set; } = "[]";
 
-        // Add this field to store the site visit form data
         public string? SiteVisitFormJson { get; set; }
+
+        // Lock fields
+        public bool IsLocked { get; set; } = false;
+        public Guid? LockedByUserId { get; set; }
+        public string? LockedByUserName { get; set; }
+        public DateTime? LockedAt { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
