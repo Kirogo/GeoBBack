@@ -156,14 +156,21 @@ public class RmChecklistController : ControllerBase
             CreatedAt = c.CreatedAt,
             UpdatedAt = c.UpdatedAt,
             SiteVisitForm = DeserializeSiteVisitForm(c.SiteVisitFormJson),
-            // Add lock info
+            // Lock info
             IsLocked = c.IsLocked,
             LockedBy = c.LockedByUserId.HasValue ? new ChecklistUserRefDto
             {
                 Id = c.LockedByUserId.Value,
                 Name = c.LockedByUserName ?? "Unknown"
             } : null,
-            LockedAt = c.LockedAt
+            LockedAt = c.LockedAt,
+            // QS fields
+            AssignedToQS = c.AssignedToQS,
+            AssignedToQSName = c.AssignedToQSName,
+            SubmittedAt = c.SubmittedAt,
+            Priority = c.Priority,
+            ReviewedAt = c.ReviewedAt,
+            ReviewedBy = c.ReviewedBy
         }).ToList();
 
         return Ok(result);
@@ -212,14 +219,21 @@ public class RmChecklistController : ControllerBase
             CreatedAt = checklist.CreatedAt,
             UpdatedAt = checklist.UpdatedAt,
             SiteVisitForm = DeserializeSiteVisitForm(checklist.SiteVisitFormJson),
-            // Add lock info
+            // Lock info
             IsLocked = checklist.IsLocked,
             LockedBy = checklist.LockedByUserId.HasValue ? new ChecklistUserRefDto
             {
                 Id = checklist.LockedByUserId.Value,
                 Name = checklist.LockedByUserName ?? "Unknown"
             } : null,
-            LockedAt = checklist.LockedAt
+            LockedAt = checklist.LockedAt,
+            // QS fields
+            AssignedToQS = checklist.AssignedToQS,
+            AssignedToQSName = checklist.AssignedToQSName,
+            SubmittedAt = checklist.SubmittedAt,
+            Priority = checklist.Priority,
+            ReviewedAt = checklist.ReviewedAt,
+            ReviewedBy = checklist.ReviewedBy
         };
 
         return Ok(result);
@@ -270,6 +284,7 @@ public class RmChecklistController : ControllerBase
                 ? JsonSerializer.Serialize(payload.SiteVisitForm, _jsonOptions)
                 : null,
             IsLocked = false,
+            Priority = "Medium", // Default priority
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
         };
@@ -295,6 +310,7 @@ public class RmChecklistController : ControllerBase
                 documents = payload.Documents,
                 siteVisitForm = payload.SiteVisitForm,
                 checklist.IsLocked,
+                checklist.Priority,
                 checklist.CreatedAt,
                 checklist.UpdatedAt,
             },
@@ -337,7 +353,20 @@ public class RmChecklistController : ControllerBase
         // Update status if provided
         if (!string.IsNullOrWhiteSpace(payload.Status))
         {
+            var oldStatus = checklist.Status;
             checklist.Status = NormalizeWorkflowStatus(payload.Status, checklist.Status);
+            
+            // If status is changing to Submitted, set SubmittedAt
+            if (checklist.Status == "submitted" && oldStatus != "submitted")
+            {
+                checklist.SubmittedAt = DateTime.UtcNow;
+            }
+        }
+
+        // Update priority if provided
+        if (!string.IsNullOrWhiteSpace(payload.Priority))
+        {
+            checklist.Priority = payload.Priority;
         }
 
         // Update documents if provided
@@ -377,9 +406,34 @@ public class RmChecklistController : ControllerBase
                 checklist.LockedByUserId,
                 checklist.LockedByUserName,
                 checklist.LockedAt,
+                checklist.Priority,
+                checklist.SubmittedAt,
                 checklist.CreatedAt,
                 checklist.UpdatedAt,
             },
+        });
+    }
+
+    // New endpoint for submitting a report
+    [HttpPost("{id:guid}/submit")]
+    public async Task<ActionResult> SubmitReport(Guid id)
+    {
+        var checklist = await _context.Checklists.FirstOrDefaultAsync(c => c.Id == id);
+
+        if (checklist == null)
+        {
+            return NotFound(new { message = "Checklist not found." });
+        }
+
+        checklist.Status = "submitted";
+        checklist.SubmittedAt = DateTime.UtcNow;
+        checklist.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { 
+            message = "Report submitted successfully",
+            submittedAt = checklist.SubmittedAt
         });
     }
 

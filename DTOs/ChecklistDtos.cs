@@ -33,6 +33,9 @@ namespace geoback.DTOs
         public List<ChecklistDocumentCategoryDto> Documents { get; set; } = new();
         
         public object? SiteVisitForm { get; set; }
+        
+        // QS fields
+        public string? Priority { get; set; }
     }
 
     public class UpdateChecklistDto
@@ -52,6 +55,9 @@ namespace geoback.DTOs
         public List<ChecklistDocumentCategoryDto> Documents { get; set; } = new();
         
         public object? SiteVisitForm { get; set; }
+        
+        // QS fields
+        public string? Priority { get; set; }
     }
 
     public class ChecklistUserRefDto
@@ -95,6 +101,14 @@ namespace geoback.DTOs
         public bool IsLocked { get; set; }
         public ChecklistUserRefDto? LockedBy { get; set; }
         public DateTime? LockedAt { get; set; }
+        
+        // QS fields for response
+        public string? AssignedToQS { get; set; }
+        public string? AssignedToQSName { get; set; }
+        public DateTime? SubmittedAt { get; set; }
+        public string? Priority { get; set; }
+        public DateTime? ReviewedAt { get; set; }
+        public string? ReviewedBy { get; set; }
     }
 
     // Lock DTOs

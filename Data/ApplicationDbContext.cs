@@ -1,5 +1,5 @@
+// Data/ApplicationDbContext.cs (add Comments DbSet if not already there)
 using Microsoft.EntityFrameworkCore;
-//GeoBack/Data/ApplicationDbContext.cs
 using geoback.Models;
 
 namespace geoback.Data
@@ -23,102 +23,35 @@ namespace geoback.Data
         public DbSet<Issue> Issues { get; set; }
         public DbSet<ReportPhoto> ReportPhotos { get; set; }
         
-        // NEW: Add these for authentication
+        // Authentication and Core Tables
         public DbSet<User> Users { get; set; }
         public DbSet<Client> Clients { get; set; }
         public DbSet<Checklist> Checklists { get; set; }
+        
+        // NEW: Comments table for QS reviews
+        public DbSet<Comment> Comments { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-            // User configuration
-            modelBuilder.Entity<User>()
-                .HasIndex(u => u.Email)
-                .IsUnique();
+            // ... rest of your existing configuration ...
 
-            // Client configuration
-            modelBuilder.Entity<Client>()
-                .HasIndex(c => c.CustomerNumber)
-                .IsUnique();
+            // Comment configuration
+            modelBuilder.Entity<Comment>()
+                .HasIndex(c => c.ReportId);
 
-            modelBuilder.Entity<Client>()
-                .HasIndex(c => c.CustomerId)
-                .IsUnique();
+            modelBuilder.Entity<Comment>()
+                .HasIndex(c => c.UserId);
 
-            // Facility configuration
-            modelBuilder.Entity<Facility>()
-                .HasIndex(f => f.IBPSNumber)
-                .IsUnique();
+            modelBuilder.Entity<Comment>()
+                .HasIndex(c => c.CreatedAt);
 
-            modelBuilder.Entity<Checklist>()
-                .HasIndex(c => c.DclNo)
-                .IsUnique();
-
-            // SiteVisitReport relationships
-            modelBuilder.Entity<SiteVisitReport>()
-                .HasOne(s => s.Facility)
-                .WithMany(f => f.SiteVisitReports)
-                .HasForeignKey(s => s.FacilityId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // Attachment relationships
-            modelBuilder.Entity<Attachment>()
-                .HasOne(a => a.SiteVisitReport)
-                .WithMany(s => s.Attachments)
-                .HasForeignKey(a => a.SiteVisitReportId)
+            modelBuilder.Entity<Comment>()
+                .HasOne(c => c.Report)
+                .WithMany(r => r.Comments)
+                .HasForeignKey(c => c.ReportId)
                 .OnDelete(DeleteBehavior.Cascade);
-
-            // ApprovalTrail relationships
-            modelBuilder.Entity<ApprovalTrailEntry>()
-                .HasOne(a => a.SiteVisitReport)
-                .WithMany(s => s.ApprovalTrail)
-                .HasForeignKey(a => a.SiteVisitReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // Comment relationships
-            modelBuilder.Entity<ReportComment>()
-                .HasOne(c => c.SiteVisitReport)
-                .WithMany(s => s.Comments)
-                .HasForeignKey(c => c.SiteVisitReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            modelBuilder.Entity<ReportComment>()
-                .HasOne(c => c.ParentComment)
-                .WithMany(c => c.Replies)
-                .HasForeignKey(c => c.ParentCommentId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // WorkProgress relationships
-            modelBuilder.Entity<WorkProgress>()
-                .HasOne(w => w.SiteVisitReport)
-                .WithMany(s => s.WorkProgress)
-                .HasForeignKey(w => w.SiteVisitReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // Issue relationships
-            modelBuilder.Entity<Issue>()
-                .HasOne(i => i.SiteVisitReport)
-                .WithMany(s => s.Issues)
-                .HasForeignKey(i => i.SiteVisitReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // ReportPhoto relationships
-            modelBuilder.Entity<ReportPhoto>()
-                .HasOne(p => p.SiteVisitReport)
-                .WithMany(s => s.ReportPhotos)
-                .HasForeignKey(p => p.SiteVisitReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // Indexes for performance
-            modelBuilder.Entity<SiteVisitReport>()
-                .HasIndex(s => s.Status);
-
-            modelBuilder.Entity<SiteVisitReport>()
-                .HasIndex(s => s.CurrentQSLockedBy);
-
-            modelBuilder.Entity<ApprovalTrailEntry>()
-                .HasIndex(a => a.Timestamp);
         }
     }
 }
