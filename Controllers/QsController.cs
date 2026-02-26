@@ -3,492 +3,575 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using geoback.Data;
 using geoback.Models;
+using geoback.DTOs;
+using System.Text.Json;
 using System.Security.Claims;
 
-namespace geoback.Controllers
+namespace geoback.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class QsController : ControllerBase
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    public class QsController : ControllerBase
+    private readonly ApplicationDbContext _context;
+    private readonly ILogger<QsController> _logger;
+    private readonly JsonSerializerOptions _jsonOptions;
+
+    public QsController(ApplicationDbContext context, ILogger<QsController> logger)
     {
-        private readonly ApplicationDbContext _context;
-        private readonly ILogger<QsController> _logger;
-
-        public QsController(ApplicationDbContext context, ILogger<QsController> logger)
+        _context = context;
+        _logger = logger;
+        _jsonOptions = new JsonSerializerOptions
         {
-            _context = context;
-            _logger = logger;
-        }
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true
+        };
+    }
 
-        // GET: api/qs/dashboard/stats
-        [HttpGet("dashboard/stats")]
-        public async Task<ActionResult<object>> GetDashboardStats()
+    // Helper method to get current user ID from token
+    private string? GetCurrentUserId()
+    {
+        return User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    }
+
+    private string? GetCurrentUserName()
+    {
+        return User.FindFirst(ClaimTypes.Name)?.Value ?? 
+               $"{User.FindFirst("firstName")?.Value} {User.FindFirst("lastName")?.Value}".Trim();
+    }
+
+    // GET: api/qs/dashboard/stats
+    [HttpGet("dashboard/stats")]
+    public async Task<ActionResult<object>> GetDashboardStats()
+    {
+        try
         {
-            try
+            var userId = GetCurrentUserId();
+            
+            var stats = new
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                
-                var stats = new
-                {
-                    PendingReviews = await _context.Checklists
-                        .CountAsync(c => c.Status == "Submitted" || c.Status == "PendingQSReview"),
-                    InProgress = await _context.Checklists
-                        .CountAsync(c => c.Status == "UnderReview" || c.Status == "InReview"),
-                    CompletedToday = await _context.Checklists
-                        .CountAsync(c => c.Status == "Approved" && 
-                            c.UpdatedAt.Date == DateTime.UtcNow.Date),
-                    ScheduledVisits = 0,
-                    AverageResponseTime = await CalculateAverageResponseTime(),
-                    CriticalIssues = await _context.Checklists
-                        .CountAsync(c => c.Priority == "High" || c.Priority == "Critical"),
-                    MyActiveReviews = await _context.Checklists
-                        .CountAsync(c => c.AssignedToQS == userId && 
-                            (c.Status == "UnderReview" || c.Status == "InReview")),
-                    OverdueReviews = await _context.Checklists
-                        .CountAsync(c => c.Status == "UnderReview" && 
-                            c.UpdatedAt < DateTime.UtcNow.AddDays(-2))
-                };
+                PendingReviews = await _context.Checklists
+                    .CountAsync(c => c.Status == "submitted" || c.Status == "pending_qs_review"),
+                InProgress = await _context.Checklists
+                    .CountAsync(c => c.Status == "under_review" || c.Status == "underreview"),
+                CompletedToday = await _context.Checklists
+                    .CountAsync(c => c.Status == "approved" && 
+                        c.UpdatedAt.Date == DateTime.UtcNow.Date),
+                ScheduledVisits = 0, // To be implemented
+                AverageResponseTime = await CalculateAverageResponseTime(),
+                CriticalIssues = await _context.Checklists
+                    .CountAsync(c => c.Priority == "High" || c.Priority == "Critical"),
+                MyActiveReviews = await _context.Checklists
+                    .CountAsync(c => c.AssignedToQS == userId && 
+                        (c.Status == "under_review" || c.Status == "underreview")),
+                OverdueReviews = await _context.Checklists
+                    .CountAsync(c => c.Status == "under_review" && 
+                        c.UpdatedAt < DateTime.UtcNow.AddDays(-2))
+            };
 
-                return Ok(stats);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting dashboard stats");
-                return StatusCode(500, new { message = "Error fetching dashboard statistics" });
-            }
+            return Ok(stats);
         }
-
-        private async Task<string> CalculateAverageResponseTime()
+        catch (Exception ex)
         {
-            var approvedReports = await _context.Checklists
-                .Where(c => c.Status == "Approved" && c.SubmittedAt != null && c.ReviewedAt != null)
+            _logger.LogError(ex, "Error getting dashboard stats");
+            return StatusCode(500, new { message = "Error fetching dashboard statistics" });
+        }
+    }
+
+    private async Task<string> CalculateAverageResponseTime()
+    {
+        var approvedReports = await _context.Checklists
+            .Where(c => c.Status == "approved" && c.SubmittedAt != null && c.ReviewedAt != null)
+            .ToListAsync();
+
+        if (!approvedReports.Any())
+            return "0h";
+
+        var totalHours = approvedReports
+            .Select(c => (c.ReviewedAt!.Value - c.SubmittedAt!.Value).TotalHours)
+            .Average();
+
+        return $"{Math.Round(totalHours)}h";
+    }
+
+    // GET: api/qs/reviews/pending
+    [HttpGet("reviews/pending")]
+    public async Task<ActionResult<object>> GetPendingReviews([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    {
+        try
+        {
+            var query = _context.Checklists
+                .Where(c => c.Status == "submitted" || c.Status == "pending_qs_review")
+                .OrderByDescending(c => c.SubmittedAt ?? c.CreatedAt);
+
+            var total = await query.CountAsync();
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
 
-            if (!approvedReports.Any())
-                return "0h";
+            var reportDtos = items.Select(c => MapToReportDto(c)).ToList();
 
-            var totalHours = approvedReports
-                .Select(c => (c.ReviewedAt!.Value - c.SubmittedAt!.Value).TotalHours)
-                .Average();
-
-            return $"{Math.Round(totalHours)}h";
+            return Ok(new
+            {
+                items = reportDtos,
+                total = total,
+                page = page,
+                pageSize = pageSize,
+                totalPages = (int)Math.Ceiling(total / (double)pageSize)
+            });
         }
-
-        // GET: api/qs/reviews/pending
-        [HttpGet("reviews/pending")]
-        public async Task<ActionResult<PaginatedResponse<Checklist>>> GetPendingReviews(
-            [FromQuery] int page = 1, 
-            [FromQuery] int pageSize = 10)
+        catch (Exception ex)
         {
-            try
-            {
-                var query = _context.Checklists
-                    .Where(c => c.Status == "Submitted" || c.Status == "PendingQSReview")
-                    .OrderByDescending(c => c.SubmittedAt ?? c.CreatedAt);
-
-                var total = await query.CountAsync();
-                var items = await query
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
-
-                return Ok(new PaginatedResponse<Checklist>
-                {
-                    Items = items,
-                    Total = total,
-                    Page = page,
-                    PageSize = pageSize,
-                    TotalPages = (int)Math.Ceiling(total / (double)pageSize)
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting pending reviews");
-                return StatusCode(500, new { message = "Error fetching pending reviews" });
-            }
+            _logger.LogError(ex, "Error getting pending reviews");
+            return StatusCode(500, new { message = "Error fetching pending reviews" });
         }
+    }
 
-        // GET: api/qs/reviews/in-progress
-        [HttpGet("reviews/in-progress")]
-        public async Task<ActionResult<PaginatedResponse<Checklist>>> GetInProgressReviews(
-            [FromQuery] int page = 1, 
-            [FromQuery] int pageSize = 10)
+    // GET: api/qs/reviews/in-progress
+    [HttpGet("reviews/in-progress")]
+    public async Task<ActionResult<object>> GetInProgressReviews([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    {
+        try
         {
-            try
-            {
-                var query = _context.Checklists
-                    .Where(c => c.Status == "UnderReview" || c.Status == "InReview")
-                    .OrderByDescending(c => c.UpdatedAt);
+            var query = _context.Checklists
+                .Where(c => c.Status == "under_review" || c.Status == "underreview")
+                .OrderByDescending(c => c.UpdatedAt);
 
-                var total = await query.CountAsync();
-                var items = await query
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
+            var total = await query.CountAsync();
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
 
-                return Ok(new PaginatedResponse<Checklist>
-                {
-                    Items = items,
-                    Total = total,
-                    Page = page,
-                    PageSize = pageSize,
-                    TotalPages = (int)Math.Ceiling(total / (double)pageSize)
-                });
-            }
-            catch (Exception ex)
+            var reportDtos = items.Select(c => MapToReportDto(c)).ToList();
+
+            return Ok(new
             {
-                _logger.LogError(ex, "Error getting in-progress reviews");
-                return StatusCode(500, new { message = "Error fetching in-progress reviews" });
-            }
+                items = reportDtos,
+                total = total,
+                page = page,
+                pageSize = pageSize,
+                totalPages = (int)Math.Ceiling(total / (double)pageSize)
+            });
         }
-
-        // GET: api/qs/reviews/completed
-        [HttpGet("reviews/completed")]
-        public async Task<ActionResult<PaginatedResponse<Checklist>>> GetCompletedReviews(
-            [FromQuery] int page = 1, 
-            [FromQuery] int pageSize = 10)
+        catch (Exception ex)
         {
-            try
-            {
-                var query = _context.Checklists
-                    .Where(c => c.Status == "Approved" || c.Status == "Completed")
-                    .OrderByDescending(c => c.UpdatedAt);
-
-                var total = await query.CountAsync();
-                var items = await query
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
-
-                return Ok(new PaginatedResponse<Checklist>
-                {
-                    Items = items,
-                    Total = total,
-                    Page = page,
-                    PageSize = pageSize,
-                    TotalPages = (int)Math.Ceiling(total / (double)pageSize)
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting completed reviews");
-                return StatusCode(500, new { message = "Error fetching completed reviews" });
-            }
+            _logger.LogError(ex, "Error getting in-progress reviews");
+            return StatusCode(500, new { message = "Error fetching in-progress reviews" });
         }
+    }
 
-        // GET: api/qs/reviews/my-active
-        [HttpGet("reviews/my-active")]
-        public async Task<ActionResult<List<Checklist>>> GetMyActiveReviews()
+    // GET: api/qs/reviews/completed
+    [HttpGet("reviews/completed")]
+    public async Task<ActionResult<object>> GetCompletedReviews([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    {
+        try
         {
-            try
-            {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                
-                var reviews = await _context.Checklists
-                    .Where(c => c.AssignedToQS == userId && 
-                        (c.Status == "UnderReview" || c.Status == "InReview"))
-                    .OrderByDescending(c => c.UpdatedAt)
-                    .ToListAsync();
+            var query = _context.Checklists
+                .Where(c => c.Status == "approved" || c.Status == "completed")
+                .OrderByDescending(c => c.UpdatedAt);
 
-                return Ok(reviews);
-            }
-            catch (Exception ex)
+            var total = await query.CountAsync();
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var reportDtos = items.Select(c => MapToReportDto(c)).ToList();
+
+            return Ok(new
             {
-                _logger.LogError(ex, "Error getting my active reviews");
-                return StatusCode(500, new { message = "Error fetching your active reviews" });
-            }
+                items = reportDtos,
+                total = total,
+                page = page,
+                pageSize = pageSize,
+                totalPages = (int)Math.Ceiling(total / (double)pageSize)
+            });
         }
-
-        // GET: api/qs/reviews/{id}
-        [HttpGet("reviews/{id}")]
-        public async Task<ActionResult<Checklist>> GetReportDetails(Guid id)
+        catch (Exception ex)
         {
-            try
-            {
-                var report = await _context.Checklists
-                    .FirstOrDefaultAsync(c => c.Id == id);
-
-                if (report == null)
-                    return NotFound(new { message = $"Report with ID {id} not found" });
-
-                return Ok(report);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting report details: {ReportId}", id);
-                return StatusCode(500, new { message = "Error fetching report details" });
-            }
+            _logger.LogError(ex, "Error getting completed reviews");
+            return StatusCode(500, new { message = "Error fetching completed reviews" });
         }
+    }
 
-        // GET: api/qs/reviews/{id}/comments
-        [HttpGet("reviews/{id}/comments")]
-        public async Task<ActionResult<List<Comment>>> GetReportComments(Guid id)
+    // GET: api/qs/reviews/my-active
+    [HttpGet("reviews/my-active")]
+    public async Task<ActionResult<List<object>>> GetMyActiveReviews()
+    {
+        try
         {
-            try
-            {
-                var comments = await _context.Comments
-                    .Where(c => c.ReportId == id)
-                    .OrderByDescending(c => c.CreatedAt)
-                    .ToListAsync();
+            var userId = GetCurrentUserId();
+            
+            var reviews = await _context.Checklists
+                .Where(c => c.AssignedToQS == userId && 
+                    (c.Status == "under_review" || c.Status == "underreview"))
+                .OrderByDescending(c => c.UpdatedAt)
+                .ToListAsync();
 
-                return Ok(comments);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting comments for report: {ReportId}", id);
-                return StatusCode(500, new { message = "Error fetching comments" });
-            }
+            return Ok(reviews.Select(c => MapToReportDto(c)).ToList());
         }
-
-        // POST: api/qs/reviews/{id}/comments
-        [HttpPost("reviews/{id}/comments")]
-        public async Task<ActionResult<Comment>> AddComment(Guid id, [FromBody] AddCommentDto dto)
+        catch (Exception ex)
         {
-            try
+            _logger.LogError(ex, "Error getting my active reviews");
+            return StatusCode(500, new { message = "Error fetching your active reviews" });
+        }
+    }
+
+    // GET: api/qs/reviews/{id}
+    [HttpGet("reviews/{id}")]
+    public async Task<ActionResult<object>> GetReportDetails(Guid id)
+    {
+        try
+        {
+            var report = await _context.Checklists
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (report == null)
+                return NotFound(new { message = $"Report with ID {id} not found" });
+
+            return Ok(MapToReportDto(report));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting report details: {ReportId}", id);
+            return StatusCode(500, new { message = "Error fetching report details" });
+        }
+    }
+
+    // GET: api/qs/reviews/{id}/comments
+    [HttpGet("reviews/{id}/comments")]
+    public async Task<ActionResult<List<Comment>>> GetReportComments(Guid id)
+    {
+        try
+        {
+            var comments = await _context.Comments
+                .Where(c => c.ReportId == id)
+                .OrderByDescending(c => c.CreatedAt)
+                .ToListAsync();
+
+            return Ok(comments);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting comments for report: {ReportId}", id);
+            return StatusCode(500, new { message = "Error fetching comments" });
+        }
+    }
+
+    // POST: api/qs/reviews/{id}/comments
+    [HttpPost("reviews/{id}/comments")]
+    public async Task<ActionResult<Comment>> AddComment(Guid id, [FromBody] AddCommentDto dto)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var userName = GetCurrentUserName();
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? "QS";
+
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new { message = "User not authenticated" });
+
+            var comment = new Comment
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                var userName = User.FindFirst(ClaimTypes.Name)?.Value;
-                var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+                Id = Guid.NewGuid(),
+                ReportId = id,
+                UserId = Guid.Parse(userId),
+                UserName = userName ?? "QS User",
+                UserRole = userRole,
+                Text = dto.Comment,
+                IsInternal = dto.IsInternal,
+                CreatedAt = DateTime.UtcNow
+            };
 
-                if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(userName))
-                    return Unauthorized(new { message = "User not authenticated" });
+            _context.Comments.Add(comment);
+            await _context.SaveChangesAsync();
 
+            return Ok(comment);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding comment to report: {ReportId}", id);
+            return StatusCode(500, new { message = "Error adding comment" });
+        }
+    }
+
+    // POST: api/qs/reviews/{id}/assign
+    [HttpPost("reviews/{id}/assign")]
+    public async Task<IActionResult> AssignToMe(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var userName = GetCurrentUserName();
+
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new { message = "User not authenticated" });
+
+            var report = await _context.Checklists.FindAsync(id);
+            if (report == null)
+                return NotFound(new { message = $"Report with ID {id} not found" });
+
+            report.AssignedToQS = userId;
+            report.AssignedToQSName = userName;
+            report.Status = "under_review";
+            report.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Report assigned successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error assigning report: {ReportId}", id);
+            return StatusCode(500, new { message = "Error assigning report" });
+        }
+    }
+
+    // POST: api/qs/reviews/{id}/revision
+    [HttpPost("reviews/{id}/revision")]
+    public async Task<IActionResult> RequestRevision(Guid id, [FromBody] RevisionRequestDto dto)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var userName = GetCurrentUserName();
+
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new { message = "User not authenticated" });
+
+            var report = await _context.Checklists.FindAsync(id);
+            if (report == null)
+                return NotFound(new { message = $"Report with ID {id} not found" });
+
+            // Update report status to revision_requested
+            report.Status = "revision_requested";
+            report.UpdatedAt = DateTime.UtcNow;
+
+            // Add revision comment with the notes
+            var comment = new Comment
+            {
+                Id = Guid.NewGuid(),
+                ReportId = id,
+                UserId = Guid.Parse(userId),
+                UserName = userName ?? "QS User",
+                UserRole = "QS",
+                Text = dto.Notes, // Just store the notes as the comment text
+                IsInternal = false,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.Comments.Add(comment);
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Revision requested successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error requesting revision for report: {ReportId}", id);
+            return StatusCode(500, new { message = "Error requesting revision" });
+        }
+    }
+
+    // POST: api/qs/reviews/{id}/approve
+    [HttpPost("reviews/{id}/approve")]
+    public async Task<IActionResult> ApproveReport(Guid id, [FromBody] ApproveReportDto? dto)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var userName = GetCurrentUserName();
+
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new { message = "User not authenticated" });
+
+            var report = await _context.Checklists.FindAsync(id);
+            if (report == null)
+                return NotFound(new { message = $"Report with ID {id} not found" });
+
+            report.Status = "approved";
+            report.ReviewedAt = DateTime.UtcNow;
+            report.ReviewedBy = userId;
+            report.UpdatedAt = DateTime.UtcNow;
+
+            if (!string.IsNullOrEmpty(dto?.Notes))
+            {
                 var comment = new Comment
                 {
                     Id = Guid.NewGuid(),
                     ReportId = id,
                     UserId = Guid.Parse(userId),
-                    UserName = userName,
-                    UserRole = userRole ?? "QS",
-                    Text = dto.Comment,
-                    IsInternal = dto.IsInternal,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                _context.Comments.Add(comment);
-                await _context.SaveChangesAsync();
-
-                return Ok(comment);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error adding comment to report: {ReportId}", id);
-                return StatusCode(500, new { message = "Error adding comment" });
-            }
-        }
-
-        // POST: api/qs/reviews/{id}/assign
-        [HttpPost("reviews/{id}/assign")]
-        public async Task<IActionResult> AssignToMe(Guid id)
-        {
-            try
-            {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                var userName = User.FindFirst(ClaimTypes.Name)?.Value;
-
-                if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(userName))
-                    return Unauthorized(new { message = "User not authenticated" });
-
-                var report = await _context.Checklists.FindAsync(id);
-                if (report == null)
-                    return NotFound(new { message = $"Report with ID {id} not found" });
-
-                report.AssignedToQS = userId;
-                report.AssignedToQSName = userName;
-                report.Status = "UnderReview";
-                report.UpdatedAt = DateTime.UtcNow;
-
-                await _context.SaveChangesAsync();
-                return Ok(new { message = "Report assigned successfully" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error assigning report: {ReportId}", id);
-                return StatusCode(500, new { message = "Error assigning report" });
-            }
-        }
-
-        // POST: api/qs/reviews/{id}/revision
-        [HttpPost("reviews/{id}/revision")]
-        public async Task<IActionResult> RequestRevision(Guid id, [FromBody] RevisionRequestDto dto)
-        {
-            try
-            {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                var userName = User.FindFirst(ClaimTypes.Name)?.Value;
-
-                if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(userName))
-                    return Unauthorized(new { message = "User not authenticated" });
-
-                var report = await _context.Checklists.FindAsync(id);
-                if (report == null)
-                    return NotFound(new { message = $"Report with ID {id} not found" });
-
-                report.Status = "RevisionRequested";
-                report.UpdatedAt = DateTime.UtcNow;
-
-                // Add revision comment
-                var comment = new Comment
-                {
-                    Id = Guid.NewGuid(),
-                    ReportId = id,
-                    UserId = Guid.Parse(userId),
-                    UserName = userName,
+                    UserName = userName ?? "QS User",
                     UserRole = "QS",
-                    Text = $"Revision requested: {dto.Notes}\nRequired changes: {string.Join(", ", dto.RequiredChanges)}",
+                    Text = $"Approved: {dto.Notes}",
                     IsInternal = false,
                     CreatedAt = DateTime.UtcNow
                 };
                 _context.Comments.Add(comment);
+            }
 
-                await _context.SaveChangesAsync();
-                return Ok(new { message = "Revision requested successfully" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error requesting revision for report: {ReportId}", id);
-                return StatusCode(500, new { message = "Error requesting revision" });
-            }
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Report approved successfully" });
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error approving report: {ReportId}", id);
+            return StatusCode(500, new { message = "Error approving report" });
+        }
+    }
 
-        // POST: api/qs/reviews/{id}/approve
-        [HttpPost("reviews/{id}/approve")]
-        public async Task<IActionResult> ApproveReport(Guid id, [FromBody] ApproveReportDto? dto)
+    // POST: api/qs/reviews/{id}/reject
+    [HttpPost("reviews/{id}/reject")]
+    public async Task<IActionResult> RejectReport(Guid id, [FromBody] RejectReportDto dto)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var userName = GetCurrentUserName();
+
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new { message = "User not authenticated" });
+
+            var report = await _context.Checklists.FindAsync(id);
+            if (report == null)
+                return NotFound(new { message = $"Report with ID {id} not found" });
+
+            report.Status = "rejected";
+            report.ReviewedAt = DateTime.UtcNow;
+            report.ReviewedBy = userId;
+            report.UpdatedAt = DateTime.UtcNow;
+
+            // Add rejection comment
+            var comment = new Comment
+            {
+                Id = Guid.NewGuid(),
+                ReportId = id,
+                UserId = Guid.Parse(userId),
+                UserName = userName ?? "QS User",
+                UserRole = "QS",
+                Text = $"Rejected: {dto.Reason}",
+                IsInternal = false,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.Comments.Add(comment);
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Report rejected successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error rejecting report: {ReportId}", id);
+            return StatusCode(500, new { message = "Error rejecting report" });
+        }
+    }
+
+    // GET: api/qs/site-visits/upcoming
+    [HttpGet("site-visits/upcoming")]
+    public async Task<ActionResult<List<object>>> GetUpcomingSiteVisits()
+    {
+        try
+        {
+            // Return empty list for now - implement when site visits are added
+            return Ok(new List<object>());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting upcoming site visits");
+            return StatusCode(500, new { message = "Error fetching site visits" });
+        }
+    }
+
+    // Helper method to map Checklist to a DTO that matches what the frontend expects
+    private object MapToReportDto(Checklist checklist)
+    {
+        // Parse the SiteVisitFormJson if it exists
+        object? siteVisitForm = null;
+        if (!string.IsNullOrWhiteSpace(checklist.SiteVisitFormJson) && checklist.SiteVisitFormJson != "null")
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                var userName = User.FindFirst(ClaimTypes.Name)?.Value;
-
-                if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(userName))
-                    return Unauthorized(new { message = "User not authenticated" });
-
-                var report = await _context.Checklists.FindAsync(id);
-                if (report == null)
-                    return NotFound(new { message = $"Report with ID {id} not found" });
-
-                report.Status = "Approved";
-                report.ReviewedAt = DateTime.UtcNow;
-                report.ReviewedBy = userId;
-                report.UpdatedAt = DateTime.UtcNow;
-
-                if (!string.IsNullOrEmpty(dto?.Notes))
-                {
-                    var comment = new Comment
-                    {
-                        Id = Guid.NewGuid(),
-                        ReportId = id,
-                        UserId = Guid.Parse(userId),
-                        UserName = userName,
-                        UserRole = "QS",
-                        Text = $"Approved: {dto.Notes}",
-                        IsInternal = false,
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    _context.Comments.Add(comment);
-                }
-
-                await _context.SaveChangesAsync();
-                return Ok(new { message = "Report approved successfully" });
+                siteVisitForm = JsonSerializer.Deserialize<object>(checklist.SiteVisitFormJson);
             }
-            catch (Exception ex)
+            catch
             {
-                _logger.LogError(ex, "Error approving report: {ReportId}", id);
-                return StatusCode(500, new { message = "Error approving report" });
+                // Ignore parsing errors
             }
         }
 
-        // POST: api/qs/reviews/{id}/reject
-        [HttpPost("reviews/{id}/reject")]
-        public async Task<IActionResult> RejectReport(Guid id, [FromBody] RejectReportDto dto)
+        // Parse DocumentsJson
+        var documents = new List<object>();
+        if (!string.IsNullOrWhiteSpace(checklist.DocumentsJson) && checklist.DocumentsJson != "[]")
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                var userName = User.FindFirst(ClaimTypes.Name)?.Value;
-
-                if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(userName))
-                    return Unauthorized(new { message = "User not authenticated" });
-
-                var report = await _context.Checklists.FindAsync(id);
-                if (report == null)
-                    return NotFound(new { message = $"Report with ID {id} not found" });
-
-                report.Status = "Rejected";
-                report.ReviewedAt = DateTime.UtcNow;
-                report.ReviewedBy = userId;
-                report.UpdatedAt = DateTime.UtcNow;
-
-                // Add rejection comment
-                var comment = new Comment
-                {
-                    Id = Guid.NewGuid(),
-                    ReportId = id,
-                    UserId = Guid.Parse(userId),
-                    UserName = userName,
-                    UserRole = "QS",
-                    Text = $"Rejected: {dto.Reason}",
-                    IsInternal = false,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _context.Comments.Add(comment);
-
-                await _context.SaveChangesAsync();
-                return Ok(new { message = "Report rejected successfully" });
+                documents = JsonSerializer.Deserialize<List<object>>(checklist.DocumentsJson) ?? new List<object>();
             }
-            catch (Exception ex)
+            catch
             {
-                _logger.LogError(ex, "Error rejecting report: {ReportId}", id);
-                return StatusCode(500, new { message = "Error rejecting report" });
+                // Ignore parsing errors
             }
         }
 
-        // GET: api/qs/site-visits/upcoming
-        [HttpGet("site-visits/upcoming")]
-        public async Task<ActionResult<List<object>>> GetUpcomingSiteVisits()
+        return new
         {
-            try
+            id = checklist.Id,
+            reportNo = checklist.DclNo,
+            customerId = checklist.CustomerId,
+            customerNumber = checklist.CustomerNumber,
+            customerName = checklist.CustomerName,
+            customerEmail = checklist.CustomerEmail,
+            projectName = checklist.ProjectName,
+            ibpsNo = checklist.IbpsNo,
+            status = checklist.Status,
+            rmId = checklist.AssignedToRM,
+            rmName = GetRmName(checklist.AssignedToRM).Result,
+            documents = documents,
+            siteVisitForm = siteVisitForm,
+            isLocked = checklist.IsLocked,
+            lockedBy = checklist.LockedByUserId.HasValue ? new
             {
-                // Return empty list for now - implement when site visits are added
-                return Ok(new List<object>());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting upcoming site visits");
-                return StatusCode(500, new { message = "Error fetching site visits" });
-            }
-        }
+                id = checklist.LockedByUserId,
+                name = checklist.LockedByUserName
+            } : null,
+            lockedAt = checklist.LockedAt,
+            assignedToQS = checklist.AssignedToQS,
+            assignedToQSName = checklist.AssignedToQSName,
+            submittedAt = checklist.SubmittedAt,
+            priority = checklist.Priority,
+            reviewedAt = checklist.ReviewedAt,
+            reviewedBy = checklist.ReviewedBy,
+            createdAt = checklist.CreatedAt,
+            updatedAt = checklist.UpdatedAt
+        };
     }
 
-    // DTO Classes
-    public class PaginatedResponse<T>
+    private async Task<string?> GetRmName(Guid? rmId)
     {
-        public List<T> Items { get; set; } = new List<T>();
-        public int Total { get; set; }
-        public int Page { get; set; }
-        public int PageSize { get; set; }
-        public int TotalPages { get; set; }
+        if (!rmId.HasValue) return null;
+        
+        var user = await _context.Users.FindAsync(rmId.Value);
+        return user != null ? $"{user.FirstName} {user.LastName}".Trim() : null;
     }
+}
 
-    public class AddCommentDto
-    {
-        public string Comment { get; set; } = string.Empty;
-        public bool IsInternal { get; set; }
-    }
+// DTOs for QS endpoints
+public class AddCommentDto
+{
+    public string Comment { get; set; } = string.Empty;
+    public bool IsInternal { get; set; }
+}
 
-    public class RevisionRequestDto
-    {
-        public string Notes { get; set; } = string.Empty;
-        public string[] RequiredChanges { get; set; } = Array.Empty<string>();
-    }
+public class RevisionRequestDto
+{
+    public string Notes { get; set; } = string.Empty;
+    public string[] RequiredChanges { get; set; } = Array.Empty<string>();
+}
 
-    public class ApproveReportDto
-    {
-        public string? Notes { get; set; }
-    }
+public class ApproveReportDto
+{
+    public string? Notes { get; set; }
+}
 
-    public class RejectReportDto
-    {
-        public string Reason { get; set; } = string.Empty;
-    }
+public class RejectReportDto
+{
+    public string Reason { get; set; } = string.Empty;
 }

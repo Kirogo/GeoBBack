@@ -358,7 +358,19 @@ C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\b
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.EntityFrameworkCore.Abstractions.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.EntityFrameworkCore.Design.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.EntityFrameworkCore.Relational.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.Extensions.Caching.Memory.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.Extensions.DependencyInjection.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.Extensions.DependencyModel.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.Extensions.Diagnostics.Abstractions.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.Extensions.Diagnostics.HealthChecks.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.Extensions.Hosting.Abstractions.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.Extensions.Logging.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.Extensions.Logging.Abstractions.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.Extensions.ObjectPool.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.Extensions.Options.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.IdentityModel.Abstractions.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.IdentityModel.JsonWebTokens.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.IdentityModel.Logging.dll
@@ -368,6 +380,7 @@ C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\b
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Microsoft.OpenApi.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Mono.TextTemplating.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\MySqlConnector.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Newtonsoft.Json.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Pomelo.EntityFrameworkCore.MySql.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Swashbuckle.AspNetCore.Swagger.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\Swashbuckle.AspNetCore.SwaggerGen.dll
@@ -379,6 +392,7 @@ C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\b
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\System.Composition.Runtime.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\System.Composition.TypedParts.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\System.IdentityModel.Tokens.Jwt.dll
+C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\System.Net.WebSockets.WebSocketProtocol.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\cs\Microsoft.CodeAnalysis.resources.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\de\Microsoft.CodeAnalysis.resources.dll
 C:\Users\samuel.kirogo\OneDrive - NCBA Group PLC\Desktop\Projects\GeoB\GeoBack\bin\Debug\net8.0\es\Microsoft.CodeAnalysis.resources.dll

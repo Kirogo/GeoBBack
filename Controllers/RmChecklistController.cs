@@ -17,6 +17,89 @@ public class RmChecklistController : ControllerBase
     private readonly IWebHostEnvironment _environment;
     private readonly JsonSerializerOptions _jsonOptions;
 
+    public class UploadChecklistDocumentRequest
+    {
+        public IFormFile? File { get; set; }
+        public string? DocumentType { get; set; }
+
+    }
+
+    [HttpPost("documents")]
+    [RequestSizeLimit(20_000_000)]
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult> UploadChecklistDocument([FromForm] UploadChecklistDocumentRequest request)
+    {
+        var file = request.File;
+        var documentType = request.DocumentType;
+
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { message = "Document file is required." });
+        }
+
+        if (file.Length > 20_000_000)
+        {
+            return BadRequest(new { message = "Maximum allowed document size is 20MB." });
+        }
+
+        var allowedExtensions = new[] { ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".jpg", ".jpeg", ".png" };
+        var extension = Path.GetExtension(file.FileName)?.ToLowerInvariant() ?? string.Empty;
+        if (!allowedExtensions.Contains(extension))
+        {
+            return BadRequest(new { message = "Only PDF, DOC, DOCX, XLS, XLSX, JPG, PNG files are allowed." });
+        }
+
+        var uploadsRoot = Path.Combine(_environment.ContentRootPath, "uploads", "rm-checklist-documents");
+        Directory.CreateDirectory(uploadsRoot);
+
+        var safeDocType = string.IsNullOrWhiteSpace(documentType)
+            ? "general"
+            : new string(documentType.Where(ch => char.IsLetterOrDigit(ch) || ch == '-' || ch == '_').ToArray()).ToLowerInvariant();
+
+        var generatedFileName = $"{safeDocType}-{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}{extension}";
+        var fullPath = Path.Combine(uploadsRoot, generatedFileName);
+
+        await using (var stream = System.IO.File.Create(fullPath))
+        {
+            await file.CopyToAsync(stream);
+        }
+
+        var publicUrl = $"/api/rmChecklist/documents/{generatedFileName}";
+
+        return Ok(new
+        {
+            message = "Document uploaded successfully",
+            url = publicUrl,
+            fileName = generatedFileName,
+            documentType = safeDocType
+        });
+    }
+
+    // Add this method to serve documents
+    [HttpGet("documents/{fileName}")]
+    public IActionResult GetChecklistDocument(string fileName)
+    {
+        var safeFileName = Path.GetFileName(fileName);
+        if (string.IsNullOrWhiteSpace(safeFileName))
+        {
+            return BadRequest(new { message = "Invalid file name." });
+        }
+
+        var fullPath = Path.Combine(_environment.ContentRootPath, "uploads", "rm-checklist-documents", safeFileName);
+        if (!System.IO.File.Exists(fullPath))
+        {
+            return NotFound(new { message = "Document not found." });
+        }
+
+        var provider = new FileExtensionContentTypeProvider();
+        if (!provider.TryGetContentType(safeFileName, out var contentType))
+        {
+            contentType = "application/octet-stream";
+        }
+
+        return PhysicalFile(fullPath, contentType);
+    }
+
     public class UploadChecklistPhotoRequest
     {
         public IFormFile? File { get; set; }
@@ -355,7 +438,7 @@ public class RmChecklistController : ControllerBase
         {
             var oldStatus = checklist.Status;
             checklist.Status = NormalizeWorkflowStatus(payload.Status, checklist.Status);
-            
+
             // If status is changing to Submitted, set SubmittedAt
             if (checklist.Status == "submitted" && oldStatus != "submitted")
             {
@@ -431,7 +514,8 @@ public class RmChecklistController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        return Ok(new { 
+        return Ok(new
+        {
             message = "Report submitted successfully",
             submittedAt = checklist.SubmittedAt
         });
