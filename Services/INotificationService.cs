@@ -1,3 +1,4 @@
+#nullable disable
 namespace geoback.Services
 {
     public interface INotificationService

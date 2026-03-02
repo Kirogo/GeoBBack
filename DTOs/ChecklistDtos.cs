@@ -109,6 +109,7 @@ namespace geoback.DTOs
         public string? Priority { get; set; }
         public DateTime? ReviewedAt { get; set; }
         public string? ReviewedBy { get; set; }
+        
     }
 
     // Lock DTOs

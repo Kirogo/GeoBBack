@@ -16,12 +16,27 @@ public class RmChecklistController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly IWebHostEnvironment _environment;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly ILogger<RmChecklistController> _logger; // Add this line
 
     public class UploadChecklistDocumentRequest
     {
         public IFormFile? File { get; set; }
         public string? DocumentType { get; set; }
+    }
 
+    public RmChecklistController(
+        ApplicationDbContext context, 
+        IWebHostEnvironment environment,
+        ILogger<RmChecklistController> logger) // Add logger to constructor
+    {
+        _context = context;
+        _environment = environment;
+        _logger = logger; // Initialize logger
+        _jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true
+        };
     }
 
     [HttpPost("documents")]
@@ -75,7 +90,6 @@ public class RmChecklistController : ControllerBase
         });
     }
 
-    // Add this method to serve documents
     [HttpGet("documents/{fileName}")]
     public IActionResult GetChecklistDocument(string fileName)
     {
@@ -105,17 +119,6 @@ public class RmChecklistController : ControllerBase
         public IFormFile? File { get; set; }
         public string? Section { get; set; }
         public int? Slot { get; set; }
-    }
-
-    public RmChecklistController(ApplicationDbContext context, IWebHostEnvironment environment)
-    {
-        _context = context;
-        _environment = environment;
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true
-        };
     }
 
     [HttpPost("photos")]
@@ -239,7 +242,6 @@ public class RmChecklistController : ControllerBase
             CreatedAt = c.CreatedAt,
             UpdatedAt = c.UpdatedAt,
             SiteVisitForm = DeserializeSiteVisitForm(c.SiteVisitFormJson),
-            // Lock info
             IsLocked = c.IsLocked,
             LockedBy = c.LockedByUserId.HasValue ? new ChecklistUserRefDto
             {
@@ -247,7 +249,6 @@ public class RmChecklistController : ControllerBase
                 Name = c.LockedByUserName ?? "Unknown"
             } : null,
             LockedAt = c.LockedAt,
-            // QS fields
             AssignedToQS = c.AssignedToQS,
             AssignedToQSName = c.AssignedToQSName,
             SubmittedAt = c.SubmittedAt,
@@ -259,68 +260,79 @@ public class RmChecklistController : ControllerBase
         return Ok(result);
     }
 
-    [HttpGet("{id:guid}")]
-    public async Task<ActionResult<ChecklistResponseDto>> GetChecklistById(Guid id)
+[HttpGet("{id:guid}")]
+public async Task<ActionResult<ChecklistResponseDto>> GetChecklistById(Guid id)
+{
+    var checklist = await _context.Checklists
+        .FirstOrDefaultAsync(c => c.Id == id);
+
+    if (checklist == null)
     {
-        var checklist = await _context.Checklists
-            .FirstOrDefaultAsync(c => c.Id == id);
-
-        if (checklist == null)
-        {
-            return NotFound(new { message = "Checklist not found." });
-        }
-
-        // Get RM info if assigned
-        ChecklistUserRefDto? assignedRM = null;
-        if (checklist.AssignedToRM.HasValue)
-        {
-            var rm = await _context.Users
-                .Where(u => u.Id == checklist.AssignedToRM.Value)
-                .Select(u => new ChecklistUserRefDto
-                {
-                    Id = u.Id,
-                    Name = $"{u.FirstName} {u.LastName}".Trim(),
-                    Email = u.Email,
-                })
-                .FirstOrDefaultAsync();
-            assignedRM = rm;
-        }
-
-        var result = new ChecklistResponseDto
-        {
-            Id = checklist.Id,
-            DclNo = checklist.DclNo,
-            CustomerId = checklist.CustomerId,
-            CustomerNumber = checklist.CustomerNumber,
-            CustomerName = checklist.CustomerName,
-            CustomerEmail = checklist.CustomerEmail,
-            ProjectName = checklist.ProjectName,
-            IbpsNo = checklist.IbpsNo,
-            Status = checklist.Status,
-            AssignedToRM = assignedRM,
-            Documents = DeserializeDocuments(checklist.DocumentsJson),
-            CreatedAt = checklist.CreatedAt,
-            UpdatedAt = checklist.UpdatedAt,
-            SiteVisitForm = DeserializeSiteVisitForm(checklist.SiteVisitFormJson),
-            // Lock info
-            IsLocked = checklist.IsLocked,
-            LockedBy = checklist.LockedByUserId.HasValue ? new ChecklistUserRefDto
-            {
-                Id = checklist.LockedByUserId.Value,
-                Name = checklist.LockedByUserName ?? "Unknown"
-            } : null,
-            LockedAt = checklist.LockedAt,
-            // QS fields
-            AssignedToQS = checklist.AssignedToQS,
-            AssignedToQSName = checklist.AssignedToQSName,
-            SubmittedAt = checklist.SubmittedAt,
-            Priority = checklist.Priority,
-            ReviewedAt = checklist.ReviewedAt,
-            ReviewedBy = checklist.ReviewedBy
-        };
-
-        return Ok(result);
+        return NotFound(new { message = "Checklist not found." });
     }
+
+    ChecklistUserRefDto? assignedRM = null;
+    if (checklist.AssignedToRM.HasValue)
+    {
+        var rm = await _context.Users
+            .Where(u => u.Id == checklist.AssignedToRM.Value)
+            .Select(u => new ChecklistUserRefDto
+            {
+                Id = u.Id,
+                Name = $"{u.FirstName} {u.LastName}".Trim(),
+                Email = u.Email,
+            })
+            .FirstOrDefaultAsync();
+        assignedRM = rm;
+    }
+
+    // Parse site visit form
+    object? siteVisitForm = null;
+    if (!string.IsNullOrWhiteSpace(checklist.SiteVisitFormJson) && checklist.SiteVisitFormJson != "null")
+    {
+        try
+        {
+            siteVisitForm = JsonSerializer.Deserialize<object>(checklist.SiteVisitFormJson);
+        }
+        catch
+        {
+            // Ignore parsing errors
+        }
+    }
+
+    var result = new ChecklistResponseDto
+    {
+        Id = checklist.Id,
+        DclNo = checklist.DclNo,
+        CustomerId = checklist.CustomerId,
+        CustomerNumber = checklist.CustomerNumber,
+        CustomerName = checklist.CustomerName,
+        CustomerEmail = checklist.CustomerEmail,
+        ProjectName = checklist.ProjectName,
+        IbpsNo = checklist.IbpsNo,
+        Status = checklist.Status,
+        AssignedToRM = assignedRM,
+        Documents = DeserializeDocuments(checklist.DocumentsJson),
+        CreatedAt = checklist.CreatedAt,
+        UpdatedAt = checklist.UpdatedAt,
+        SiteVisitForm = siteVisitForm, // THIS IS THE CRITICAL LINE
+        IsLocked = checklist.IsLocked,
+        LockedBy = checklist.LockedByUserId.HasValue ? new ChecklistUserRefDto
+        {
+            Id = checklist.LockedByUserId.Value,
+            Name = checklist.LockedByUserName ?? "Unknown"
+        } : null,
+        LockedAt = checklist.LockedAt,
+        AssignedToQS = checklist.AssignedToQS,
+        AssignedToQSName = checklist.AssignedToQSName,
+        SubmittedAt = checklist.SubmittedAt,
+        Priority = checklist.Priority,
+        ReviewedAt = checklist.ReviewedAt,
+        ReviewedBy = checklist.ReviewedBy
+    };
+
+    return Ok(result);
+}
 
     [HttpPost]
     public async Task<ActionResult> CreateChecklist([FromBody] CreateChecklistDto payload)
@@ -367,7 +379,7 @@ public class RmChecklistController : ControllerBase
                 ? JsonSerializer.Serialize(payload.SiteVisitForm, _jsonOptions)
                 : null,
             IsLocked = false,
-            Priority = "Medium", // Default priority
+            Priority = "Medium",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
         };
@@ -444,6 +456,12 @@ public class RmChecklistController : ControllerBase
             {
                 checklist.SubmittedAt = DateTime.UtcNow;
             }
+            
+            // If status is changing to rework, log it
+            if (checklist.Status == "rework" && oldStatus != "rework")
+            {
+                _logger.LogInformation($"Report {id} returned for rework");
+            }
         }
 
         // Update priority if provided
@@ -452,16 +470,17 @@ public class RmChecklistController : ControllerBase
             checklist.Priority = payload.Priority;
         }
 
-        // Update documents if provided
-        if (payload.Documents != null && payload.Documents.Any())
+        // Update documents if provided - ALWAYS update documents if they exist in payload
+        if (payload.Documents != null)
         {
             checklist.DocumentsJson = JsonSerializer.Serialize(payload.Documents, _jsonOptions);
         }
 
-        // Update site visit form if provided
+        // Update site visit form if provided - CRITICAL: Always update form data if it exists
         if (payload.SiteVisitForm != null)
         {
             checklist.SiteVisitFormJson = JsonSerializer.Serialize(payload.SiteVisitForm, _jsonOptions);
+            _logger.LogInformation($"Updated SiteVisitFormJson for report {id}");
         }
 
         checklist.UpdatedAt = DateTime.UtcNow;
@@ -497,7 +516,6 @@ public class RmChecklistController : ControllerBase
         });
     }
 
-    // New endpoint for submitting a report
     [HttpPost("{id:guid}/submit")]
     public async Task<ActionResult> SubmitReport(Guid id)
     {
@@ -532,7 +550,6 @@ public class RmChecklistController : ControllerBase
             return NotFound(new { message = "Checklist not found." });
         }
 
-        // Check if already locked by someone else
         if (checklist.IsLocked && checklist.LockedByUserId != payload.UserId)
         {
             return Conflict(new
@@ -543,7 +560,6 @@ public class RmChecklistController : ControllerBase
             });
         }
 
-        // If it's locked by the same user, just return success (already locked)
         if (checklist.IsLocked && checklist.LockedByUserId == payload.UserId)
         {
             return Ok(new
@@ -562,7 +578,6 @@ public class RmChecklistController : ControllerBase
             });
         }
 
-        // Lock the report
         checklist.IsLocked = true;
         checklist.LockedByUserId = payload.UserId;
         checklist.LockedByUserName = payload.UserName;
@@ -597,13 +612,11 @@ public class RmChecklistController : ControllerBase
             return NotFound(new { message = "Checklist not found." });
         }
 
-        // Only allow unlock by the same user
         if (checklist.LockedByUserId != payload.UserId)
         {
             return Unauthorized(new { message = "You cannot unlock a report locked by another user" });
         }
 
-        // Unlock the report
         checklist.IsLocked = false;
         checklist.LockedByUserId = null;
         checklist.LockedByUserName = null;
@@ -705,9 +718,14 @@ public class RmChecklistController : ControllerBase
         return status switch
         {
             "draft" => "draft",
-            "pending_qs_review" => "pending_qs_review",
-            "pendingqsreview" => "pending_qs_review",
+            "pending" => "pending",
             "submitted" => "submitted",
+            "rework" => "rework",
+            "approved" => "approved",
+            "rejected" => "rejected",
+            // Handle legacy statuses
+            "revision_requested" => "rework",
+            "returned" => "rework",
             _ => string.IsNullOrWhiteSpace(currentStatus) ? "pending" : currentStatus,
         };
     }

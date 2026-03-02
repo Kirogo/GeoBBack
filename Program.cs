@@ -9,6 +9,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.OpenApi.Models;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using MySqlConnector; // Add this using
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,17 +57,34 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// MySQL Database Context
+// MySQL Database Context - FIXED VERSION
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new InvalidOperationException("Database connection string 'DefaultConnection' not found.");
+}
+
+// Log connection string (without password) for debugging
+var maskedConnectionString = connectionString.Replace(
+    connectionString.Split("Password=").Last().Split(';').First(), 
+    "*****");
+Console.WriteLine($"Attempting to connect with: {maskedConnectionString}");
+
+// Use explicit server version instead of AutoDetect
+var serverVersion = new MySqlServerVersion(new Version(9, 6, 0)); // Match your MySQL version
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseMySql(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        ServerVersion.AutoDetect(builder.Configuration.GetConnectionString("DefaultConnection")),
-        mysqlOptions => mysqlOptions.EnableRetryOnFailure(
+    options.UseMySql(connectionString, serverVersion, mysqlOptions =>
+    {
+        mysqlOptions.EnableRetryOnFailure(
             maxRetryCount: 3,
             maxRetryDelay: TimeSpan.FromSeconds(5),
-            errorNumbersToAdd: null
-        )
-    ));
+            errorNumbersToAdd: null);
+        
+        // Add these options for stability
+        mysqlOptions.CommandTimeout(60);
+        mysqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+    }));
 
 // Register services
 builder.Services.AddScoped<IFacilityService, FacilityService>();
