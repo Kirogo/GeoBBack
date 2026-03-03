@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("geoback")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f356ece529c5428c9427c5c1509424e6a318031c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f2c0d752c3f5e3afebb1f0988d8b5c062dd5baf9")]
 [assembly: System.Reflection.AssemblyProductAttribute("geoback")]
 [assembly: System.Reflection.AssemblyTitleAttribute("geoback")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
